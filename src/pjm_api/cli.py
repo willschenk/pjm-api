@@ -32,6 +32,13 @@ logger = get_logger()
 NO_UNLOCK_COMMANDS = frozenset({"init", "templates", "cli", "config", "credentials"})
 
 
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("--preview-chars must be zero or greater")
+    return parsed
+
+
 def _build_parser() -> argparse.ArgumentParser:
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument("--env", default=DEFAULT_ENVIRONMENT, choices=sorted(EXTENDED_OASIS_URLS))
@@ -84,6 +91,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tmpl.add_argument("--action")
     tmpl.add_argument("--query-param", action="append", default=[])
     tmpl.add_argument("--continuation-flag", default="N")
+    tmpl.add_argument("--preview-chars", type=_non_negative_int, default=2000)
 
     tlist = sub.add_parser("templates", help="Template catalog (advanced).")
     tsub = tlist.add_subparsers(dest="templates_cmd", required=True)
@@ -308,7 +316,8 @@ def _cmd_template_native(settings, args) -> int:
             action_override=args.action,
         )
         _save_response(resp, settings, args.save, args.outfile)
-        print(resp.text()[:2000])
+        if args.preview_chars:
+            print(resp.text()[: args.preview_chars])
         return 0 if resp.ok else 1
 
 

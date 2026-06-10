@@ -1,7 +1,26 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from pjm_api.cli import main
+
+
+def _template_argv(**extra):
+    argv = [
+        "template",
+        "TRANSSERV",
+        "--username",
+        "u",
+        "--password",
+        "p",
+        "--cert",
+        "/tmp/cert.pem",
+    ]
+    for key, value in extra.items():
+        flag = f"--{key.replace('_', '-')}"
+        argv.extend([flag, str(value)])
+    return argv
 
 
 def _template_settings(downloads_dir: Path):
@@ -12,17 +31,17 @@ def _template_settings(downloads_dir: Path):
     return settings
 
 
-def _template_response():
+def _template_response(*, text: str = "template-preview", ok: bool = True):
     resp = MagicMock()
-    resp.ok = True
-    resp.text.return_value = "template-preview"
+    resp.ok = ok
+    resp.text.return_value = text
     resp.save.return_value = Path("/saved/path")
     return resp
 
 
-def _run_template(argv, downloads_dir: Path):
+def _run_template(argv, downloads_dir: Path, *, text: str = "template-preview", ok: bool = True):
     settings = _template_settings(downloads_dir)
-    resp = _template_response()
+    resp = _template_response(text=text, ok=ok)
     with patch("pjm_api.cli.load_settings", return_value=settings), patch(
         "pjm_api.cli.OasisClient"
     ) as mock_client_class:
@@ -36,17 +55,7 @@ def _run_template(argv, downloads_dir: Path):
 
 def test_template_without_save_flags_does_not_write_file(tmp_path, capsys):
     downloads = tmp_path / "downloads"
-    argv = [
-        "template",
-        "TRANSSERV",
-        "--username",
-        "u",
-        "--password",
-        "p",
-        "--cert",
-        "/tmp/cert.pem",
-    ]
-    code, resp = _run_template(argv, downloads)
+    code, resp = _run_template(_template_argv(), downloads)
     captured = capsys.readouterr()
     assert code == 0
     resp.save.assert_not_called()
@@ -55,20 +64,41 @@ def test_template_without_save_flags_does_not_write_file(tmp_path, capsys):
     resp.text.assert_called_once()
 
 
+def test_template_default_preview_is_2000_chars(tmp_path, capsys):
+    downloads = tmp_path / "downloads"
+    body = "x" * 3000
+    code, _resp = _run_template(_template_argv(), downloads, text=body)
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out.strip() == "x" * 2000
+
+
+def test_template_custom_preview_chars(tmp_path, capsys):
+    downloads = tmp_path / "downloads"
+    body = "y" * 1000
+    code, _resp = _run_template(_template_argv(preview_chars=500), downloads, text=body)
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out.strip() == "y" * 500
+
+
+def test_template_zero_preview_chars_prints_no_body(tmp_path, capsys):
+    downloads = tmp_path / "downloads"
+    body = "preview-body"
+    code, _resp = _run_template(_template_argv(preview_chars=0), downloads, text=body, ok=False)
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "preview-body" not in captured.out
+
+
+def test_template_negative_preview_chars_fails():
+    with pytest.raises(SystemExit):
+        main(_template_argv(preview_chars=-1))
+
+
 def test_template_outfile_saves_to_downloads_dir(tmp_path, capsys):
     downloads = tmp_path / "downloads"
-    argv = [
-        "template",
-        "TRANSSERV",
-        "--username",
-        "u",
-        "--password",
-        "p",
-        "--cert",
-        "/tmp/cert.pem",
-        "--outfile",
-        "result.txt",
-    ]
+    argv = _template_argv(outfile="result.txt")
     code, resp = _run_template(argv, downloads)
     assert code == 0
     resp.save.assert_called_once_with(downloads / "result.txt")
@@ -78,18 +108,7 @@ def test_template_outfile_saves_to_downloads_dir(tmp_path, capsys):
 def test_template_save_uses_exact_path(tmp_path, capsys):
     downloads = tmp_path / "downloads"
     save_path = tmp_path / "result.txt"
-    argv = [
-        "template",
-        "TRANSSERV",
-        "--username",
-        "u",
-        "--password",
-        "p",
-        "--cert",
-        "/tmp/cert.pem",
-        "--save",
-        str(save_path),
-    ]
+    argv = _template_argv(save=str(save_path))
     code, resp = _run_template(argv, downloads)
     assert code == 0
     resp.save.assert_called_once_with(save_path)
