@@ -8,6 +8,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 from pjm_api.certs import (
+    PUBLIC_CERT_FIX,
+    PUBLIC_CERT_MESSAGE,
     CertificateKind,
     inspect_certificate,
     normalize_certificate,
@@ -55,14 +57,27 @@ def test_normalize_pem_keypair(tmp_path):
     assert normalized.subject
 
 
-def test_public_only_pem_raises(tmp_path):
+def _assert_public_only_rejected(exc_info):
+    assert str(exc_info.value) == PUBLIC_CERT_MESSAGE
+    assert exc_info.value.fix == PUBLIC_CERT_FIX
+
+
+@pytest.mark.parametrize("suffix", [".crt", ".cer", ".pem"])
+def test_public_only_files_rejected(tmp_path, suffix):
     cert_pem, _ = _make_pem_keypair(include_key=False)
-    path = tmp_path / "public.pem"
+    path = tmp_path / f"public{suffix}"
     path.write_bytes(cert_pem)
-    with pytest.raises(PJMCertificateError, match="Public certificate") as exc_info:
+    with pytest.raises(PJMCertificateError) as exc_info:
         normalize_certificate(path)
-    assert ".p12" in exc_info.value.fix
-    assert "Account Manager" in exc_info.value.fix
+    _assert_public_only_rejected(exc_info)
+
+
+def test_pem_with_private_key_not_public_only(tmp_path):
+    cert_pem, _ = _make_pem_keypair(include_key=True)
+    path = tmp_path / "login.pem"
+    path.write_bytes(cert_pem)
+    normalized = normalize_certificate(path)
+    assert normalized.kind == CertificateKind.PEM_KEYPAIR
 
 
 def test_missing_certificate_file_has_init_fix(tmp_path):
@@ -78,6 +93,7 @@ def test_inspect_public_cert_warns(tmp_path):
     path.write_bytes(cert_pem)
     report = inspect_certificate(path)
     assert any("Account Manager" in w for w in report.warnings)
+    assert PUBLIC_CERT_MESSAGE in report.errors[0]
     assert not report.healthy
 
 

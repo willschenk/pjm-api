@@ -13,6 +13,10 @@ from pathlib import Path
 
 from pjm_api.exceptions import PJMCertificateError
 
+PUBLIC_CERT_MESSAGE = (
+    "Public certificate only: upload this file in PJM Account Manager, "
+    "but use the .p12 or .pfx login file with pjm-api."
+)
 PUBLIC_CERT_FIX = (
     "Use your .p12 or .pfx login file for runtime auth; "
     "upload public .cer/.crt only in Account Manager"
@@ -147,10 +151,7 @@ def _load_pem_pair(path: Path, key_path: Path | None = None) -> tuple[bytes, byt
         return cert_pem, key_path.read_bytes()
 
     if b"BEGIN CERTIFICATE" in cert_pem and b"BEGIN" not in cert_pem.split(b"CERTIFICATE", 1)[1]:
-        raise PJMCertificateError(
-            "Public certificate only — use Account Manager upload, not runtime login",
-            fix=PUBLIC_CERT_FIX,
-        )
+        raise PJMCertificateError(PUBLIC_CERT_MESSAGE, fix=PUBLIC_CERT_FIX)
     raise PJMCertificateError("PEM file must contain private key or provide PJM_KEY_PATH")
 
 
@@ -172,10 +173,7 @@ def normalize_certificate(
     elif kind == CertificateKind.PEM_KEYPAIR:
         cert_pem, key_pem = _load_pem_pair(path, key_path)
     elif kind == CertificateKind.PUBLIC_ONLY:
-        raise PJMCertificateError(
-            "Public certificate only — use Account Manager upload, not runtime login",
-            fix=PUBLIC_CERT_FIX,
-        )
+        raise PJMCertificateError(PUBLIC_CERT_MESSAGE, fix=PUBLIC_CERT_FIX)
     else:
         raise PJMCertificateError(f"Unknown certificate type: {path.suffix}")
 
