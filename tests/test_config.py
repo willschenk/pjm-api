@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from pjm_api.config import (
@@ -12,14 +14,16 @@ from pjm_api.exceptions import PJMConfigError
 
 
 def test_parse_certificate_with_password():
-    path, password = parse_certificate("/tmp/cert.p12|secret")
-    assert str(path) == "/tmp/cert.p12"
+    cert = Path("/tmp/cert.p12")
+    path, password = parse_certificate(f"{cert}|secret")
+    assert path == cert
     assert password == "secret"
 
 
 def test_parse_certificate_path_only():
-    path, password = parse_certificate("/tmp/cert.p12")
-    assert str(path) == "/tmp/cert.p12"
+    cert = Path("/tmp/cert.p12")
+    path, password = parse_certificate(str(cert))
+    assert path == cert
     assert password is None
 
 
@@ -45,13 +49,14 @@ def test_load_settings_from_env(monkeypatch):
 
 
 def test_legacy_cli_env_aliases(monkeypatch):
+    legacy_cert = Path("/tmp/legacy.p12")
     monkeypatch.setenv("PJM_CLI_USER", "legacy-user")
     monkeypatch.setenv("PJM_CLI_PASSWORD", "legacy-pass")
-    monkeypatch.setenv("PJM_CLI_CERTIFICATE", "/tmp/legacy.p12|legacy-pw")
+    monkeypatch.setenv("PJM_CLI_CERTIFICATE", f"{legacy_cert}|legacy-pw")
 
     settings = load_settings(use_credentials_file=False)
     assert settings.username == "legacy-user"
-    assert settings.certificate_legacy() == "/tmp/legacy.p12|legacy-pw"
+    assert settings.certificate_legacy() == f"{legacy_cert}|legacy-pw"
 
 
 def test_invalid_backend_raises(monkeypatch):
