@@ -2,33 +2,32 @@
 
 A small Python CLI and client for PJM OASIS browserless access.
 
-`pjm-api` handles the local setup that usually makes PJM OASIS automation painful: credentials, a login certificate, SSO authentication, the PJM auth cookie, and OASIS template requests.
+`pjm-api` is meant to make the normal user path boring: clone the repo, install the package, run setup, verify the setup, and run a PJM OASIS template request.
 
 This project is unofficial and is not affiliated with PJM.
 
 ## Goal
 
-A user should be able to:
+The goal is simple:
 
-1. Clone the repository.
-2. Install the package.
-3. Run `pjm-api init`.
-4. Enter a PJM username, PJM password, and login certificate path.
-5. Run `pjm-api doctor` and know exactly what is broken if setup fails.
-6. Run a PJM OASIS template request from the CLI or Python.
+```text
+clone -> install -> pjm-api init -> pjm-api doctor -> pjm-api template TRANSSERV
+```
 
-Keep the package small. The default path should be native Python. The Java CLI backend should remain available only as an advanced fallback.
+A user should not need to understand the full PJM browserless authentication flow before making a basic request. The package should hide the mechanical parts while still making failures easy to diagnose.
+
+Keep the project small. Native Python is the default path. The Java CLI backend is an advanced fallback.
 
 ## Requirements
 
 | Requirement | Notes |
 |---|---|
 | Python | Python 3.10 or newer |
-| PJM account | Username and password for the target PJM environment |
-| Login certificate | `.p12` or `.pfx` file that contains the private key and certificate |
-| Account Manager approval | The matching public certificate must be uploaded in PJM Account Manager and approved by the CAM |
+| PJM account | Access to the PJM environment you want to use |
+| Login certificate | Local `.p12` or `.pfx` file containing the private key and certificate |
+| Account Manager approval | Matching public certificate uploaded in PJM Account Manager and approved by the CAM |
 
-Install with the `pfx` extra unless you are deliberately avoiding PKCS#12 files.
+Install with the `pfx` extra for normal `.p12` or `.pfx` use.
 
 ## Quick start
 
@@ -39,30 +38,21 @@ python -m pip install -e ".[pfx]"
 pj m-api init
 ```
 
-The command above should be:
+If the last line above renders incorrectly, run:
 
 ```bash
 pjm-api init
 ```
 
-`pjm-api init` asks for:
+The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file.
 
-```text
-PJM username
-PJM password
-Path to login .p12/.pfx file
-Certificate password
-Environment [TRAIN]
-Master password for the encrypted local credentials file
-```
-
-Then verify the full setup:
+Verify everything:
 
 ```bash
 pjm-api doctor
 ```
 
-A clean setup looks like this:
+Expected shape of a passing result:
 
 ```text
 [1/4] credentials file               OK  (/Users/you/.pjm/credentials.enc)
@@ -79,7 +69,7 @@ Run a first request:
 pjm-api template TRANSSERV
 ```
 
-Use production only when the training setup is working:
+Use production only after training works:
 
 ```bash
 pjm-api template TRANSSERV --env PRODUCTION
@@ -89,14 +79,14 @@ pjm-api template TRANSSERV --env PRODUCTION
 
 ```mermaid
 flowchart TD
-    A[Clone repo] --> B[Install package with pfx extra]
+    A[Clone repo] --> B[Install with pfx extra]
     B --> C[Run pjm-api init]
-    C --> D[Enter PJM username and password]
-    D --> E[Enter local .p12 or .pfx login certificate]
-    E --> F[Save encrypted credentials file]
+    C --> D[Enter PJM login details]
+    D --> E[Enter local .p12 or .pfx path]
+    E --> F[Save encrypted credentials]
     F --> G[Run pjm-api doctor]
     G --> H{All checks pass?}
-    H -->|Yes| I[Run OASIS templates]
+    H -->|Yes| I[Run OASIS template requests]
     H -->|No| J[Fix the failed doctor step]
     J --> G
 ```
@@ -120,7 +110,7 @@ flowchart LR
     Doctor --> SSO
 ```
 
-Use the `.p12` or `.pfx` file with `pjm-api init`. Upload only the public certificate to Account Manager. Do not commit certificates, passwords, `.env`, or `~/.pjm/credentials.enc`.
+Use the `.p12` or `.pfx` file with `pjm-api init`. Upload only the public certificate to Account Manager. Do not commit certificates, local credential files, or `.env` files.
 
 ## Runtime flow
 
@@ -134,9 +124,9 @@ sequenceDiagram
     participant OASIS as PJM OASIS
 
     User->>CLI: pjm-api template TRANSSERV
-    CLI->>Store: unlock username, password, cert path
+    CLI->>Store: unlock saved configuration
     CLI->>Cert: load private key and certificate
-    CLI->>SSO: authenticate with mTLS plus username/password
+    CLI->>SSO: authenticate with mTLS plus login details
     SSO-->>CLI: tokenId
     CLI->>OASIS: template request with pjmauth cookie
     OASIS-->>CLI: template response
@@ -177,10 +167,10 @@ with OasisClient(load_settings()) as client:
 | Command | Purpose |
 |---|---|
 | `pjm-api init` | Create the encrypted local credentials file |
-| `pjm-api doctor` | Check credentials, certificate, SSO login, and a TRANSSERV smoke request |
+| `pjm-api doctor` | Check credentials, certificate, SSO login, and TRANSSERV smoke request |
 | `pjm-api cert-doctor` | Inspect the configured certificate |
 | `pjm-api credentials show` | Show a redacted credential summary |
-| `pjm-api credentials rotate-password` | Change the local master password |
+| `pjm-api credentials rotate-password` | Change the local master key |
 | `pjm-api config` | Show resolved settings without printing secrets |
 | `pjm-api auth-check` | Test SSO authentication only |
 | `pjm-api auth-check --full` | Test SSO and TRANSSERV |
@@ -188,7 +178,7 @@ with OasisClient(load_settings()) as client:
 | `pjm-api templates list` | List known template metadata |
 | `pjm-api templates info NAME` | Show metadata for one template |
 
-Common examples:
+Examples:
 
 ```bash
 pjm-api cert-doctor
@@ -201,7 +191,7 @@ pjm-api template TRANSSERV --query-param RETURN_TZ=EP --query-param VERSION=3.3
 
 Settings resolve in this order:
 
-1. CLI arguments, such as `--username`, `--cert`, and `--env`.
+1. CLI arguments.
 2. Encrypted credentials from `pjm-api init`.
 3. Environment variables and `.env` compatibility values.
 
@@ -211,26 +201,7 @@ Default encrypted credentials path:
 ~/.pjm/credentials.enc
 ```
 
-Override it with:
-
-```bash
-export PJM_CREDENTIALS_FILE=/secure/path/credentials.enc
-```
-
-Useful environment variables:
-
-| Variable | Purpose |
-|---|---|
-| `PJM_USERNAME` | PJM username |
-| `PJM_PASSWORD` | PJM password |
-| `PJM_CERT` | Certificate path, optionally `path|password` |
-| `PJM_CERT_PATH` | Certificate path only |
-| `PJM_CERT_PASSWORD` | Certificate password |
-| `PJM_ENV` | `TRAIN`, `PRODUCTION`, `TEST`, or `STAGE` |
-| `PJM_TIMEOUT_SEC` | Request timeout |
-| `PJM_MASTER_PASSWORD` | Unlock encrypted credentials without an interactive prompt |
-
-Prefer `pjm-api init` for normal use. Use environment variables for CI or controlled automation.
+Prefer `pjm-api init` for normal use. Use environment variables only for controlled automation.
 
 ## Troubleshooting
 
@@ -245,11 +216,11 @@ The first failing line is the thing to fix.
 | Failure | Most likely fix |
 |---|---|
 | `credentials file FAIL` | Run `pjm-api init` |
-| `certificate file FAIL` | Confirm the `.p12` or `.pfx` path and certificate password |
+| `certificate file FAIL` | Confirm the `.p12` or `.pfx` path and certificate secret |
 | `Public certificate only` | Use the login `.p12` or `.pfx`, not the public `.cer` or `.crt` |
 | `PKCS#12 requires [pfx] extra` | Reinstall with `python -m pip install -e ".[pfx]"` |
-| `SSO authentication FAIL` | Check username, password, certificate approval, and environment |
-| `TRANSSERV smoke FAIL` | Authentication worked, but the OASIS request failed. Check template access and parameters |
+| `SSO authentication FAIL` | Check login details, certificate approval, and environment |
+| `TRANSSERV smoke FAIL` | Authentication worked, but the OASIS request failed. Check access and template parameters |
 
 More detail: [docs/troubleshooting.md](docs/troubleshooting.md)
 
@@ -262,11 +233,10 @@ ruff check .
 mypy src
 ```
 
-Run live checks only with real credentials and explicit opt-in:
+Live tests require real PJM credentials and explicit opt-in:
 
 ```bash
 export PJM_LIVE_TEST=1
-export PJM_MASTER_PASSWORD=...
 pytest tests/live
 ```
 
