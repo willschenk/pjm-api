@@ -38,12 +38,6 @@ python -m pip install -e ".[pfx]"
 pj m-api init
 ```
 
-If the last line above renders incorrectly, run:
-
-```bash
-pjm-api init
-```
-
 The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file.
 
 Verify everything:
