@@ -4,7 +4,7 @@ The normal path is documented in the README:
 
 ```bash
 python -m pip install -e ".[pfx]"
-pj m-api init
+pjm-api init
 pjm-api doctor
 ```
 
@@ -26,9 +26,7 @@ Run a smoke test through the CLI backend:
 PJM_BACKEND=cli PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar pjm-api smoke
 ```
 
-Requires Java 8 or newer.
-
-Warning: the CLI backend passes secrets to a subprocess. Prefer the native backend for normal use.
+Requires Java 8 or newer. Prefer the native backend for normal use.
 
 ## Environments
 
@@ -83,7 +81,7 @@ export PJM_LIVE_TEST=1
 pytest tests/live
 ```
 
-Use a local encrypted credentials file or controlled environment variables. Do not commit secrets or certificates.
+Use a local encrypted credentials file or controlled environment variables. Do not commit certificates.
 
 ## Template catalog
 
