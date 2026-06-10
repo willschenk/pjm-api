@@ -11,11 +11,13 @@ Python client for PJM OASIS. Unofficial — not affiliated with PJM.
 ```bash
 git clone https://github.com/willschenk/pjm-api
 cd pjm-api
-pip install -e ".[pfx]"
+python -m pip install -e ".[pfx]"
 pjm-api init
 pjm-api doctor
 pjm-api template TRANSSERV
 ```
+
+No network yet? Run `pjm-api doctor --offline` to check local credentials and certificate only.
 
 Expected `doctor` output:
 
@@ -49,7 +51,7 @@ sequenceDiagram
 
 ## Certificates
 
-PJM uses **two different files**. Mixing them up is the most common failure.
+PJM uses two certificate files. Do not point init at a public `.crt` or `.cer`.
 
 ```mermaid
 flowchart LR
@@ -82,18 +84,18 @@ See [docs/python-usage.md](docs/python-usage.md) for template queries, saving re
 ## CLI
 
 ```bash
-pjm-api doctor                              # verify setup
+pjm-api doctor                              # verify setup (network checks)
+pjm-api doctor --offline                    # local credentials and cert only
+pjm-api smoke                               # TRANSSERV smoke test
 pjm-api template TRANSSERV                  # print preview to stdout
 pjm-api template TRANSSERV --preview-chars 500  # shorter preview
 pjm-api template TRANSSERV --outfile result.txt  # save to downloads/
 pjm-api template TRANSSERV --save /tmp/result.txt  # save to exact path
-pjm-api template TRANSSERV --env PRODUCTION # production (advanced)
+pjm-api template TRANSSERV --env PRODUCTION # production (see advanced docs)
 pjm-api credentials show                    # redacted summary
 ```
 
 ## Troubleshooting
-
-Check local setup without contacting PJM:
 
 ```bash
 pjm-api doctor --offline
@@ -112,7 +114,15 @@ flowchart TD
     s4 -->|yes| f5["check username and password"]
 ```
 
-See [docs/troubleshooting.md](docs/troubleshooting.md) for error messages.
+See [docs/troubleshooting.md](docs/troubleshooting.md) for error messages and fixes.
+
+## Documentation
+
+- [Setup walkthrough](docs/setup.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Python usage](docs/python-usage.md)
+- [Advanced](docs/advanced.md)
+- [Security](SECURITY.md)
 
 ## Advanced
 
