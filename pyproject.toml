@@ -10,7 +10,23 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "willschenk" }]
+keywords = ["pjm", "oasis", "energy", "api", "pki"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/willschenk/pjm-api"
+Repository = "https://github.com/willschenk/pjm-api"
+Documentation = "https://github.com/willschenk/pjm-api/blob/main/README.md"
+Issues = "https://github.com/willschenk/pjm-api/issues"
 
 [project.optional-dependencies]
 pfx = ["cryptography>=42.0.0"]
