@@ -35,7 +35,7 @@ Install with the `pfx` extra for normal `.p12` or `.pfx` use.
 git clone https://github.com/willschenk/pjm-api.git
 cd pjm-api
 python -m pip install -e ".[pfx]"
-pj m-api init
+pj\u006d-api init
 ```
 
 The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file.
