@@ -6,7 +6,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from pjm_api.exceptions import PJMConfigError
 
@@ -192,6 +192,7 @@ def load_settings(
     ).upper()
 
     cert_password_override = certificate_password or _env("PJM_CERT_PASSWORD")
+    cert_path: Path | None
     if creds and creds.cert_path:
         cert_path = Path(creds.cert_path).expanduser()
         cert_password = creds.cert_password or cert_password_override or None
@@ -230,7 +231,7 @@ def load_settings(
         oasis_base_url=resolve_oasis_url(resolved_environment, custom_oasis),
         sso_url=resolve_sso_url(resolved_environment, custom_sso),
         logout_url=resolve_logout_url(resolved_environment),
-        backend=resolved_backend,  # type: ignore[assignment]
+        backend=cast(Backend, resolved_backend),
         java_path=resolved_java,
         jar_path=Path(resolved_jar).expanduser() if resolved_jar else None,
         downloads_dir=resolved_downloads,

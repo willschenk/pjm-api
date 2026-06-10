@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
+from typing import Any, cast
 
 
 @dataclass(frozen=True)
@@ -20,9 +21,9 @@ class TemplateInfo:
 
 
 @lru_cache(maxsize=1)
-def _load_catalog() -> dict:
+def _load_catalog() -> dict[str, Any]:
     data = files("pjm_api.data").joinpath("template_catalog.json").read_text(encoding="utf-8")
-    return json.loads(data)
+    return cast(dict[str, Any], json.loads(data))
 
 
 def list_templates(*, pjm_custom_only: bool = False) -> list[TemplateInfo]:

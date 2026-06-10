@@ -328,14 +328,14 @@ def _cmd_template_native(settings, args) -> int:
 
 def _cmd_templates(args) -> int:
     if args.templates_cmd == "list":
-        for info in list_templates():
-            print(f"{info.name:20} {info.description}")
+        for tmpl in list_templates():
+            print(f"{tmpl.name:20} {tmpl.description}")
         return 0
-    info = get_template_info(args.name)
-    if not info:
+    template_info = get_template_info(args.name)
+    if not template_info:
         print(f"Unknown template: {args.name}")
         return 1
-    print(json.dumps(info.__dict__, indent=2, default=list))
+    print(json.dumps(template_info.__dict__, indent=2, default=list))
     return 0
 
 
