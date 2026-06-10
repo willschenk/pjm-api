@@ -29,9 +29,7 @@ from pjm_api.unlock import clear_unlock_cache
 
 logger = get_logger()
 
-NO_UNLOCK_COMMANDS = frozenset(
-    {"init", "templates", "cli", "config", "credentials", "doctor", "cert-doctor"}
-)
+NO_UNLOCK_COMMANDS = frozenset({"init", "templates", "cli", "config", "credentials"})
 
 
 def _build_parser() -> argparse.ArgumentParser:
