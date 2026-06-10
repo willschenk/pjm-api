@@ -52,7 +52,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("init", help="Create encrypted credentials file.")
+    init = sub.add_parser("init", help="Create encrypted credentials file.")
+    init.add_argument("--force", action="store_true")
     sub.add_parser("doctor", parents=[shared], help="Run all setup checks.")
     creds = sub.add_parser("credentials", help="Manage credentials file.")
     creds_sub = creds.add_subparsers(dest="credentials_cmd", required=True)
@@ -99,9 +100,17 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _cmd_init() -> int:
+def _cmd_init(args) -> int:
+    cred_path = credentials_path()
     print("pjm-api init — create encrypted credentials")
-    print(f"File: {credentials_path()}\n")
+    print(f"File: {cred_path}\n")
+
+    if credentials_exist() and not args.force:
+        print(f"Existing credentials: {cred_path}")
+        answer = input("Overwrite existing credentials? [y/N]: ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("Canceled.")
+            return 1
 
     username = input("PJM username: ").strip()
     password = getpass.getpass("PJM password: ")
@@ -326,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "init":
-            return _cmd_init()
+            return _cmd_init(args)
         if args.command == "templates":
             return _cmd_templates(args)
         if args.command == "cli":

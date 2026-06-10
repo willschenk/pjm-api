@@ -44,16 +44,64 @@ def _healthy_report(path: Path) -> CertInspectionReport:
     )
 
 
+def _run_successful_init(cred_path: Path, cert_path: Path, *, force: bool = False):
+    inputs = iter(["testuser", str(cert_path), "TRAIN"])
+    argv = ["init", "--force"] if force else ["init"]
+    with patch("builtins.input", lambda _: next(inputs)), patch(
+        "getpass.getpass", side_effect=["testpass", "certpass", "master", "master"]
+    ), patch("pjm_api.cli.inspect_certificate", return_value=_healthy_report(cert_path)):
+        return main(argv)
+
+
 def test_init_command(tmp_path, monkeypatch):
     path = tmp_path / "credentials.enc"
     cert_path = tmp_path / "login.p12"
     cert_path.write_bytes(b"\x30\x82\x00\x01")
     monkeypatch.setenv("PJM_CREDENTIALS_FILE", str(path))
-    inputs = iter(["testuser", str(cert_path), "TRAIN"])
+    code = _run_successful_init(path, cert_path)
+    assert code == 0
+    assert path.exists()
+
+
+def test_init_overwrite_declined(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "credentials.enc"
+    cert_path = tmp_path / "login.p12"
+    cert_path.write_bytes(b"\x30\x82\x00\x01")
+    monkeypatch.setenv("PJM_CREDENTIALS_FILE", str(path))
+    save_credentials(StoredCredentials("old", "old", str(cert_path), "old", "TRAIN"), "old", path)
+    original = path.read_bytes()
+    with patch("builtins.input", lambda _: "no"), patch(
+        "pjm_api.cli.save_credentials"
+    ) as mock_save:
+        code = main(["init"])
+    assert code == 1
+    mock_save.assert_not_called()
+    assert path.read_bytes() == original
+    assert "Canceled." in capsys.readouterr().out
+
+
+def test_init_overwrite_confirmed(tmp_path, monkeypatch):
+    path = tmp_path / "credentials.enc"
+    cert_path = tmp_path / "login.p12"
+    cert_path.write_bytes(b"\x30\x82\x00\x01")
+    monkeypatch.setenv("PJM_CREDENTIALS_FILE", str(path))
+    save_credentials(StoredCredentials("old", "old", str(cert_path), "old", "TRAIN"), "old", path)
+    inputs = iter(["yes", "testuser", str(cert_path), "TRAIN"])
     with patch("builtins.input", lambda _: next(inputs)), patch(
         "getpass.getpass", side_effect=["testpass", "certpass", "master", "master"]
     ), patch("pjm_api.cli.inspect_certificate", return_value=_healthy_report(cert_path)):
         code = main(["init"])
+    assert code == 0
+    assert path.exists()
+
+
+def test_init_force_skips_overwrite_prompt(tmp_path, monkeypatch):
+    path = tmp_path / "credentials.enc"
+    cert_path = tmp_path / "login.p12"
+    cert_path.write_bytes(b"\x30\x82\x00\x01")
+    monkeypatch.setenv("PJM_CREDENTIALS_FILE", str(path))
+    save_credentials(StoredCredentials("old", "old", str(cert_path), "old", "TRAIN"), "old", path)
+    code = _run_successful_init(path, cert_path, force=True)
     assert code == 0
     assert path.exists()
 
