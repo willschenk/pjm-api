@@ -4,6 +4,8 @@ Python client for PJM OASIS. Unofficial — not affiliated with PJM.
 
 ## Quick start
 
+**Full walkthrough:** [docs/setup.md](docs/setup.md) — zero to first TRANSSERV call.
+
 **You need:** Python 3.10+, a login `.p12`/`.pfx` file (private key + cert), CAM-approved public cert in Account Manager.
 
 ```bash
