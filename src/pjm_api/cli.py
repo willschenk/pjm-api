@@ -107,6 +107,24 @@ def _cmd_init() -> int:
     password = getpass.getpass("PJM password: ")
     cert_path = input("Path to login .p12/.pfx file: ").strip()
     cert_password = getpass.getpass("Certificate password: ")
+
+    resolved_cert = Path(cert_path).expanduser()
+    if not resolved_cert.exists():
+        print(f"Certificate file not found: {resolved_cert}", file=sys.stderr)
+        return 2
+
+    report = inspect_certificate(resolved_cert, cert_password)
+    if report.errors:
+        for error in report.errors:
+            print(error, file=sys.stderr)
+        return 2
+
+    print(f"kind:    {report.kind.value}")
+    if report.not_after:
+        print(f"expires: {report.not_after.date()}")
+    for warning in report.warnings:
+        print(f"WARN: {warning}")
+
     env = input("Environment [TRAIN]: ").strip() or "TRAIN"
     master = getpass.getpass("Master password (encrypts credentials file): ")
     master_confirm = getpass.getpass("Confirm master password: ")
@@ -117,7 +135,7 @@ def _cmd_init() -> int:
     data = StoredCredentials(
         username=username,
         password=password,
-        cert_path=str(Path(cert_path).expanduser()),
+        cert_path=str(resolved_cert),
         cert_password=cert_password,
         environment=env.upper(),
     )
