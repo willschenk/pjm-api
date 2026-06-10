@@ -59,8 +59,17 @@ def test_public_only_pem_raises(tmp_path):
     cert_pem, _ = _make_pem_keypair(include_key=False)
     path = tmp_path / "public.pem"
     path.write_bytes(cert_pem)
-    with pytest.raises(PJMCertificateError, match="Public certificate"):
+    with pytest.raises(PJMCertificateError, match="Public certificate") as exc_info:
         normalize_certificate(path)
+    assert ".p12" in exc_info.value.fix
+    assert "Account Manager" in exc_info.value.fix
+
+
+def test_missing_certificate_file_has_init_fix(tmp_path):
+    path = tmp_path / "missing.p12"
+    with pytest.raises(PJMCertificateError, match="not found") as exc_info:
+        normalize_certificate(path)
+    assert exc_info.value.fix == "Re-run pjm-api init with the correct certificate path"
 
 
 def test_inspect_public_cert_warns(tmp_path):
