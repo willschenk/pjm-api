@@ -51,7 +51,10 @@ class PJMSession:
         )
         token = payload.get("tokenId")
         if not token:
-            raise PJMAuthError(f"No tokenId in authentication response: {payload}")
+            raise PJMAuthError(
+                "No tokenId in authentication response. "
+                "Check CAM certificate approval and environment."
+            )
         self._token = str(token)
         return self._token
 

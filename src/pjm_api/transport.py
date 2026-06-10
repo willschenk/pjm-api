@@ -10,6 +10,26 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from pjm_api.exceptions import PJMAuthError, PJMTimeoutError
+from pjm_api.logging_utils import redact_secrets
+
+_AUTH_401_MESSAGE = (
+    "Authentication failed (401). Check PJM username, password, environment, "
+    "and CAM certificate approval."
+)
+_INVALID_JSON_MESSAGE = (
+    "Authentication response was not JSON. Check the SSO URL and environment."
+)
+_BODY_SNIPPET_LIMIT = 200
+
+
+def _safe_body_snippet(content: bytes) -> str:
+    text = content.decode(errors="replace").strip()
+    if not text:
+        return "(empty response)"
+    snippet = text[:_BODY_SNIPPET_LIMIT]
+    if len(text) > _BODY_SNIPPET_LIMIT:
+        snippet += "..."
+    return redact_secrets(snippet)
 
 
 @dataclass(frozen=True)
@@ -58,12 +78,16 @@ def post_json(
     merged.setdefault("Accept", "application/json")
     response = request("POST", url, ssl_context=ssl_context, headers=merged, timeout=timeout)
     if response.status_code >= 400:
-        body = response.content.decode(errors="replace").strip()
-        raise PJMAuthError(f"Authentication failed ({response.status_code}): {body}")
+        if response.status_code == 401:
+            raise PJMAuthError(_AUTH_401_MESSAGE)
+        raise PJMAuthError(
+            f"Authentication failed ({response.status_code}): "
+            f"{_safe_body_snippet(response.content)}"
+        )
     try:
         payload = json.loads(response.content.decode())
     except json.JSONDecodeError as exc:
-        raise PJMAuthError(f"Invalid JSON in auth response: {response.content!r}") from exc
+        raise PJMAuthError(_INVALID_JSON_MESSAGE) from exc
     if not isinstance(payload, dict):
         raise PJMAuthError(f"Unexpected auth response type: {type(payload)}")
     return payload
