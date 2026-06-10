@@ -1,7 +1,7 @@
 import urllib.error
 
-from pjm_api.exceptions import PJMConfigError
 from pjm_api.cli_zip import install_cli_zip
+from pjm_api.exceptions import PJMConfigError
 
 
 def test_install_cli_zip_offline(tmp_path, monkeypatch):

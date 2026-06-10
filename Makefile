@@ -1,4 +1,4 @@
-.PHONY: test test-live lint format install
+.PHONY: test test-live lint format install doctor-live
 
 install:
 	pip install -e ".[dev,pfx]"
@@ -8,6 +8,9 @@ test:
 
 test-live:
 	PJM_LIVE_TEST=1 pytest tests/ -m live
+
+doctor-live:
+	PJM_LIVE_TEST=1 pjm-api doctor --env TRAIN
 
 lint:
 	ruff check .

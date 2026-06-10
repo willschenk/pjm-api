@@ -1,27 +1,22 @@
 # Contributing
 
-Thank you for contributing to pjm-api.
-
-## Security
-
-Never commit:
-
-- `.env` files or credentials
-- Certificate files (`.p12`, `.pfx`, `.pem`, `.key`, `.crt`)
-- Private local scripts (`test.py`, `GUIDANCE.md`)
-
-## Running tests
+## Setup
 
 ```bash
-pip install -e ".[dev]"
-pytest                    # unit + contract tests
-pytest -m live            # opt-in live PJM tests (requires credentials)
+pip install -e ".[dev,pfx]"
+pytest tests/ -m "not live"
 ```
 
-Live tests require `PJM_LIVE_TEST=1` and valid `PJM_USERNAME`, `PJM_PASSWORD`, and `PJM_CERT` environment variables. Use TRAIN environment only for CI and development.
+## Credentials in tests
 
-## Code style
+Use temporary `PJM_CREDENTIALS_FILE` paths — never commit real credentials.
 
-- Run `ruff check .` and `ruff format .` before submitting
-- Keep the core package stdlib-first; optional extras for heavier dependencies
-- Match existing module conventions in `src/pjm_api/`
+## Live tests
+
+```bash
+export PJM_LIVE_TEST=1
+export PJM_MASTER_PASSWORD=...
+make doctor-live
+```
+
+Use TRAIN only. Never commit `.p12`, `.env`, or `credentials.enc`.

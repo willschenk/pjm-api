@@ -6,14 +6,13 @@ import pytest
 from pjm_api.auth import authenticate, create_session
 from pjm_api.certs import CertificateKind, NormalizedCertificate
 from pjm_api.config import load_settings
-from pjm_api.exceptions import PJMAuthError, PJMTimeoutError
-from pjm_api.transport import RawHTTPResponse, request
+from pjm_api.exceptions import PJMTimeoutError
+from pjm_api.transport import request
 
 
 def test_request_http_error():
     import urllib.error
 
-    req = urllib.request.Request("https://example.com")
     err = urllib.error.HTTPError("https://example.com", 401, "Unauthorized", {}, None)
     err.fp = __import__("io").BytesIO(b"denied")
     with patch("urllib.request.urlopen", side_effect=err):

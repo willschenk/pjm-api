@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from pjm_api.config import DEFAULT_ENVIRONMENT, EXTENDED_OASIS_URLS, get_env_url
+from pjm_api.config import DEFAULT_ENVIRONMENT, EXTENDED_OASIS_URLS
 
 MEM_ARGS = ["-Xms64m", "-Xmx256m"]
 TIMEOUT = ["-z", "180000"]

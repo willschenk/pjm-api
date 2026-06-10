@@ -1,65 +1,110 @@
 # pjm-api
 
-Python client for the PJM OASIS API.
-
-## Sources
-
-This project is based entirely on information that PJM and NAESB publish publicly — including PJM's browserless authentication guide, PKI authentication guide, PKI FAQ, OASIS API guide, and related system requirements. It is an unofficial client library and is not affiliated with, endorsed by, or supported by PJM. Refer to [PJM's eTools documentation](https://www.pjm.com/markets-and-operations/etools) for authoritative specifications.
-
-## Certificate workflow
-
-PJM uses two different certificate files:
-
-1. **Account Manager (public cert)** — upload a public certificate (`.cer`, `.crt`) without the private key. Your CAM must approve user-uploaded certs.
-2. **Runtime login (private key)** — use a PKCS#12 file (`.p12`, `.pfx`) containing your private key for browserless/API authentication.
-
-Run `pjm-api cert-doctor` if unsure which file you have.
-
-## Install
-
-```bash
-pip install -e ".[dev,pfx]"
-```
-
-Copy `.env.example` to `.env` and set credentials locally. Never commit secrets or certificate files.
+Python client for PJM OASIS. Unofficial — not affiliated with PJM.
 
 ## Quick start
 
+**You need:** Python 3.10+, a login `.p12`/`.pfx` file (private key + cert), CAM-approved public cert in Account Manager.
+
 ```bash
-pjm-api config
-pjm-api cert-doctor
-pjm-api auth-check
-pjm-api smoke --env TRAIN
-pjm-api template TRANSSERV --env TRAIN -q OUTPUT_FORMAT=DATA
+git clone https://github.com/willschenk/pjm-api
+cd pjm-api
+pip install -e ".[pfx]"
+pjm-api init
+pjm-api doctor
+pjm-api template TRANSSERV
 ```
 
-## Backends
+Expected `doctor` output:
 
-| Backend | Command | Requires |
-|---------|---------|----------|
-| `native` (default) | Pure Python mTLS | Python 3.10+, `.p12` with `[pfx]` extra |
-| `cli` | Official PJM Java CLI | Java 8+, `pjm-cli.jar` |
+```
+[1/4] credentials file             OK  (~/.pjm/credentials.enc)
+[2/4] certificate file             OK  (expires 2027-03-15)
+[3/4] SSO authentication           OK
+[4/4] TRANSSERV smoke (TRAIN)      OK
 
-Switch with `PJM_BACKEND=cli` or `--backend cli`.
+All checks passed.
+```
 
-## Module layout
+### Setup flow
 
-- `auth` — PKI SSO authentication and session
-- `certs` — certificate inspection and PKCS#12 normalization
-- `oasis` — native OASIS template client
-- `cli_adapter` — official Java CLI fallback
-- `templates` — static template catalog metadata
-- `config` — unified settings from environment variables
+```mermaid
+sequenceDiagram
+    participant You
+    participant Init as pjm_api_init
+    participant File as credentials_enc
+    participant PJM as PJM_SSO
 
-## Local overrides
+    You->>Init: pjm-api init
+    Init->>You: username password cert path
+    Init->>File: encrypt and save
+    You->>Init: pjm-api doctor
+    Init->>File: decrypt
+    Init->>PJM: mTLS plus credentials
+    PJM-->>Init: tokenId
+    Init-->>You: PASS
+```
 
-Keep machine-specific paths in a gitignored `test.py` or `.env` file. See `examples/env_file.py`.
+## Certificates
+
+PJM uses **two different files**. Mixing them up is the most common failure.
+
+```mermaid
+flowchart LR
+    subgraph wrong [Wrong for pjm-api]
+        PublicCert[".cer / .crt\npublic key only"]
+    end
+    subgraph right [Correct for pjm-api]
+        P12[".p12 / .pfx\nprivate key plus cert"]
+    end
+    PublicCert -->|"Upload here"| AM[Account Manager]
+    P12 -->|"Set at pjm-api init"| Login[Runtime login]
+```
+
+| File | Use |
+|------|-----|
+| `.cer` / `.crt` | Upload to Account Manager (public key only) |
+| `.p12` / `.pfx` | Point `pjm-api init` here (login file) |
+
+## Python
+
+```python
+from pjm_api import OasisClient, load_settings
+
+with OasisClient(load_settings()) as client:
+    print(client.smoke_transserv().text()[:500])
+```
+
+## CLI
+
+```bash
+pjm-api doctor                              # verify setup
+pjm-api template TRANSSERV                  # query on TRAIN
+pjm-api template TRANSSERV --env PRODUCTION # production (advanced)
+pjm-api credentials show                    # redacted summary
+```
 
 ## Troubleshooting
 
-1. `pjm-api config` — verify settings
-2. `pjm-api cert-doctor` — verify certificate type and expiry
-3. `pjm-api auth-check` — verify SSO authentication
-4. `pjm-api smoke --env TRAIN` — end-to-end OASIS health check
+```mermaid
+flowchart TD
+    start[doctor failed] --> s1{credentials file?}
+    s1 -->|no| f1["pjm-api init"]
+    s1 -->|yes| s2{cert file exists?}
+    s2 -->|no| f2["re-run pjm-api init with correct path"]
+    s2 -->|yes| s3{file is .p12 not .crt?}
+    s3 -->|no| f3["use login .p12 not public .crt"]
+    s3 -->|yes| s4{CAM approved cert?}
+    s4 -->|no| f4["wait for CAM approval"]
+    s4 -->|yes| f5["check username and password"]
+```
 
-See `docs/` for detailed guides.
+See [docs/troubleshooting.md](docs/troubleshooting.md) for error messages.
+
+## Advanced
+
+Java CLI backend, TEST/STAGE environments, live tests: [docs/advanced.md](docs/advanced.md)
+
+## Sources
+
+Based on publicly posted PJM/NAESB documentation. Authoritative specs: [PJM eTools](https://www.pjm.com/markets-and-operations/etools).

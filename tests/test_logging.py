@@ -1,11 +1,12 @@
-from pjm_api.exceptions import PJMCertificateError, PJMConfigError
+from pjm_api.exceptions import PJMCertificateError, PJMConfigError, PJMError
 from pjm_api.logging_utils import redact_secrets
 from pjm_api.security import audit_subprocess_cmd
 
 
-def test_exception_hints():
-    assert PJMConfigError("x").hint
-    assert PJMCertificateError("x").hint
+def test_exception_fix_hints():
+    assert PJMConfigError("x").fix == "Run: pjm-api init"
+    assert PJMCertificateError("x").fix == "Run: pjm-api doctor"
+    assert PJMError("x", fix="custom").fix == "custom"
 
 
 def test_redact_secrets():

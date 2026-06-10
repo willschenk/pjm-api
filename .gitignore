@@ -40,6 +40,10 @@ htmlcov/
 test.py
 GUIDANCE.md
 
+# Encrypted credentials (use pjm-api init)
+.pjm/
+*.enc
+
 # Environment and secrets
 .env
 *.pem

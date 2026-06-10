@@ -12,13 +12,26 @@ from pjm_api.certs import inspect_certificate
 from pjm_api.cli_adapter import CLI_ARGV_SECRET_WARNING, CliBackend
 from pjm_api.cli_zip import install_cli_zip
 from pjm_api.config import DEFAULT_ENVIRONMENT, EXTENDED_OASIS_URLS, load_settings
+from pjm_api.credentials import (
+    StoredCredentials,
+    credentials_exist,
+    credentials_path,
+    rotate_master_password,
+    save_credentials,
+)
+from pjm_api.doctor import format_doctor_report, run_doctor
 from pjm_api.exceptions import PJMError
 from pjm_api.logging_utils import configure_logging, get_logger
 from pjm_api.oasis import OasisClient
 from pjm_api.oasis_cli import parse_key_value_pairs
 from pjm_api.templates import get_template_info, list_templates
+from pjm_api.unlock import clear_unlock_cache
 
 logger = get_logger()
+
+NO_UNLOCK_COMMANDS = frozenset(
+    {"init", "templates", "cli", "config", "credentials", "doctor", "cert-doctor"}
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -36,19 +49,27 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="pjm-api",
-        description="PJM OASIS client — authenticate, diagnose, and run templates.",
+        description="PJM OASIS client.",
         parents=[shared],
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    sub.add_parser("init", help="Create encrypted credentials file.")
+    sub.add_parser("doctor", parents=[shared], help="Run all setup checks.")
+    creds = sub.add_parser("credentials", help="Manage credentials file.")
+    creds_sub = creds.add_subparsers(dest="credentials_cmd", required=True)
+    creds_sub.add_parser("show", help="Show redacted credentials summary.")
+    rotate = creds_sub.add_parser("rotate-password", help="Change master password.")
+    rotate.add_argument("--force", action="store_true")
+
     sub.add_parser("config", parents=[shared], help="Show resolved configuration.")
     auth = sub.add_parser("auth-check", parents=[shared], help="Verify authentication.")
-    auth.add_argument("--full", action="store_true", help="Run TRANSSERV smoke after SSO check.")
+    auth.add_argument("--full", action="store_true")
     cert = sub.add_parser("cert-doctor", parents=[shared], help="Inspect certificate file.")
     cert.add_argument("--json", action="store_true")
 
     smoke = sub.add_parser("smoke", parents=[shared], help="Run TRANSSERV smoke test.")
-    smoke.add_argument("--all", action="store_true", help="Run TEST, STAGE, TRAIN batch.")
+    smoke.add_argument("--all", action="store_true")
     smoke.add_argument("--outfile")
     smoke.add_argument("--save")
     smoke.add_argument("--output-format")
@@ -65,34 +86,91 @@ def _build_parser() -> argparse.ArgumentParser:
     tmpl.add_argument("--query-param", action="append", default=[])
     tmpl.add_argument("--continuation-flag", default="N")
 
-    tlist = sub.add_parser("templates", help="Template catalog commands.")
+    tlist = sub.add_parser("templates", help="Template catalog (advanced).")
     tsub = tlist.add_subparsers(dest="templates_cmd", required=True)
     tsub.add_parser("list")
     info = tsub.add_parser("info")
     info.add_argument("name")
 
-    cli_install = sub.add_parser("cli", help="PJM Java CLI management.")
+    cli_install = sub.add_parser("cli", help="PJM Java CLI (advanced).")
     cli_sub = cli_install.add_subparsers(dest="cli_cmd", required=True)
-    inst = cli_sub.add_parser("install", help="Download and install PJM CLI ZIP.")
+    inst = cli_sub.add_parser("install")
     inst.add_argument("--dir", default="~/.pjm/cli")
     inst.add_argument("--force", action="store_true")
 
     return parser
 
 
-def _prompt_secrets(args: argparse.Namespace, settings_kwargs: dict) -> dict:
-    if args.command in ("config", "templates", "cli", "cert-doctor"):
-        return settings_kwargs
-    if not settings_kwargs.get("password") and not args.password:
-        settings_kwargs["password"] = getpass.getpass("PJM password: ")
-    cert_path = settings_kwargs.get("certificate") or args.cert
-    if cert_path and str(cert_path).endswith((".p12", ".pfx")):
-        if not settings_kwargs.get("certificate_password") and not args.cert_password:
-            settings_kwargs["certificate_password"] = getpass.getpass("Certificate password: ")
-    return settings_kwargs
+def _cmd_init() -> int:
+    print("pjm-api init — create encrypted credentials")
+    print(f"File: {credentials_path()}\n")
+
+    username = input("PJM username: ").strip()
+    password = getpass.getpass("PJM password: ")
+    cert_path = input("Path to login .p12/.pfx file: ").strip()
+    cert_password = getpass.getpass("Certificate password: ")
+    env = input("Environment [TRAIN]: ").strip() or "TRAIN"
+    master = getpass.getpass("Master password (encrypts credentials file): ")
+    master_confirm = getpass.getpass("Confirm master password: ")
+    if master != master_confirm:
+        print("Master passwords do not match.", file=sys.stderr)
+        return 2
+
+    data = StoredCredentials(
+        username=username,
+        password=password,
+        cert_path=str(Path(cert_path).expanduser()),
+        cert_password=cert_password,
+        environment=env.upper(),
+    )
+    path = save_credentials(data, master)
+    print(f"\nSaved: {path}")
+    print("Next: pjm-api doctor")
+    return 0
 
 
-def _load_from_args(args: argparse.Namespace):
+def _cmd_credentials(args) -> int:
+    if args.credentials_cmd == "show":
+        if not credentials_exist():
+            print("No credentials file. Run: pjm-api init")
+            return 1
+        from pjm_api.unlock import load_unlocked_credentials
+
+        creds = load_unlocked_credentials(prompt=True)
+        if not creds:
+            print("Could not unlock credentials.", file=sys.stderr)
+            return 2
+        for key, val in creds.redacted_summary().items():
+            print(f"  {key + ':':14} {val}")
+        print(f"  file:          {credentials_path()}")
+        return 0
+
+    if args.credentials_cmd == "rotate-password":
+        if not credentials_exist():
+            print("No credentials file. Run: pjm-api init")
+            return 1
+        old = getpass.getpass("Current master password: ")
+        new = getpass.getpass("New master password: ")
+        confirm = getpass.getpass("Confirm new master password: ")
+        if new != confirm:
+            print("Passwords do not match.", file=sys.stderr)
+            return 2
+        path = rotate_master_password(old, new)
+        clear_unlock_cache()
+        print(f"Updated: {path}")
+        return 0
+
+    return 2
+
+
+def _cmd_doctor(settings) -> int:
+    steps, passed = run_doctor(settings)
+    print(format_doctor_report(steps, passed))
+    return 0 if passed else 1
+
+
+def _load_from_args(args: argparse.Namespace, *, prompt_unlock: bool = True):
+    prompt_secrets = args.command not in NO_UNLOCK_COMMANDS
     kwargs = dict(
         username=args.username or "",
         password=args.password or "",
@@ -102,8 +180,11 @@ def _load_from_args(args: argparse.Namespace):
         oasis_url=getattr(args, "oasis_url", "") or "",
         backend=args.backend or "",
         downloads_dir=args.downloads or "",
+        prompt_unlock=prompt_unlock and prompt_secrets,
     )
-    kwargs = _prompt_secrets(args, kwargs)
+    if prompt_secrets and not kwargs["password"] and not args.password:
+        if not credentials_exist():
+            kwargs["password"] = getpass.getpass("PJM password: ") if False else ""
     return load_settings(**kwargs)
 
 
@@ -113,12 +194,10 @@ def _cmd_config(settings) -> int:
         ("backend", settings.backend),
         ("environment", settings.environment),
         ("oasis_url", settings.oasis_base_url),
-        ("sso_url", settings.sso_url),
         ("username", settings.username or "(not set)"),
         ("password", "***" if settings.password else "(not set)"),
         ("certificate", settings.certificate_path or "(not set)"),
-        ("downloads", settings.downloads_dir),
-        ("jar_path", settings.jar_path or "(not set)"),
+        ("credentials", credentials_path() if credentials_exist() else "(not set)"),
     ]:
         print(f"  {key + ':':14} {val}")
     missing = settings.missing_for_backend()
@@ -132,45 +211,35 @@ def _cmd_config(settings) -> int:
 
 def _cmd_cert_doctor(settings, args) -> int:
     if not settings.certificate_path:
-        print("[cert-doctor] No certificate configured.")
+        print("No certificate configured. Run: pjm-api init")
         return 1
     report = inspect_certificate(settings.certificate_path, settings.certificate_password)
     if args.json:
         print(json.dumps(report.to_dict(), indent=2))
     else:
-        print(f"[cert-doctor] path:       {report.path}")
-        print(f"[cert-doctor] kind:       {report.kind.value}")
-        print(f"[cert-doctor] subject:    {report.subject or '(unknown)'}")
-        print(f"[cert-doctor] issuer:     {report.issuer or '(unknown)'}")
-        print(f"[cert-doctor] thumbprint: {report.thumbprint or '(unknown)'}")
-        if report.not_after:
-            print(f"[cert-doctor] expires:    {report.not_after.isoformat()}")
+        for line in [
+            f"path:       {report.path}",
+            f"kind:       {report.kind.value}",
+            f"subject:    {report.subject or '(unknown)'}",
+            f"expires:    {report.not_after.date() if report.not_after else '(unknown)'}",
+        ]:
+            print(line)
         for w in report.warnings:
-            print(f"[cert-doctor] WARN: {w}")
+            print(f"WARN: {w}")
         for e in report.errors:
-            print(f"[cert-doctor] ERROR: {e}")
+            print(f"ERROR: {e}")
     return 0 if report.healthy else 2
 
 
 def _cmd_auth_check(settings, args) -> int:
     settings.validate()
-    if settings.backend == "cli" and not args.full:
-        backend = CliBackend(settings)
-        result = backend.run_cli(backend.build_smoke_test_cmd(), timeout_sec=60)
-        ok = result.returncode == 0 and "SUCCESS" in result.stdout
-        print("[auth-check] PASS" if ok else "[auth-check] FAIL")
-        return 0 if ok else 1
-
     with OasisClient(settings) as client:
         client.authenticate()
-        print("[auth-check] PASS — SSO token obtained.")
+        print("SSO authentication: OK")
         if args.full:
             resp = client.smoke_transserv()
-            ok = resp.ok and resp.text()
-            print(
-                "[auth-check] TRANSSERV smoke PASS" if ok else "[auth-check] TRANSSERV smoke FAIL"
-            )
-            return 0 if ok else 1
+            print(f"TRANSSERV smoke: {'OK' if resp.ok else 'FAIL'}")
+            return 0 if resp.ok else 1
     return 0
 
 
@@ -181,52 +250,17 @@ def _save_response(resp, settings, save_path: str | None, outfile: str | None) -
         path = settings.downloads_dir / outfile
     else:
         return
-    saved = resp.save(path)
-    print(f"Saved output to {saved}")
+    print(f"Saved: {resp.save(path)}")
 
 
 def _cmd_smoke_native(settings, args) -> int:
     settings.downloads_dir.mkdir(parents=True, exist_ok=True)
-    if args.all:
-        from pjm_api.config import load_settings
-
-        results = {}
-        for env in ("TEST", "STAGE", "TRAIN"):
-            env_settings = load_settings(
-                username=settings.username,
-                password=settings.password,
-                certificate=str(settings.certificate_path or ""),
-                certificate_password=settings.certificate_password or "",
-                environment=env,
-                backend="native",
-            )
-            try:
-                with OasisClient(env_settings) as client:
-                    resp = client.smoke_transserv()
-                    ok = resp.ok
-                    if args.save or args.outfile:
-                        _save_response(
-                            resp,
-                            env_settings,
-                            args.save,
-                            args.outfile or f"smoke_{env.lower()}.txt",
-                        )
-                    results[env] = ok
-                    print(f"[SMOKE TEST:{env}] {'PASS' if ok else 'FAIL'}")
-            except Exception as exc:
-                print(f"[SMOKE TEST:{env}] ERROR - {exc}")
-                results[env] = False
-        return 0 if all(results.values()) else 1
-
     with OasisClient(settings) as client:
-        params = {}
-        if args.output_format:
-            params["OUTPUT_FORMAT"] = args.output_format
-        resp = client.request("TRANSSERV", params) if params else client.smoke_transserv()
-        ok = resp.ok
+        params = {"OUTPUT_FORMAT": args.output_format} if args.output_format else None
+        resp = client.request("TRANSSERV", params or {}) if params else client.smoke_transserv()
         _save_response(resp, settings, args.save, args.outfile)
-        print(f"[SMOKE TEST:{settings.environment}] {'PASS' if ok else 'FAIL'}")
-        return 0 if ok else 1
+        print(f"TRANSSERV: {'OK' if resp.ok else 'FAIL'}")
+        return 0 if resp.ok else 1
 
 
 def _cmd_template_native(settings, args) -> int:
@@ -241,7 +275,7 @@ def _cmd_template_native(settings, args) -> int:
             continuation_flag=args.continuation_flag,
             action_override=args.action,
         )
-        _save_response(resp, settings, args.save, args.outfile or f"{args.name.lower()}_output.txt")
+        _save_response(resp, settings, args.save, args.outfile or f"{args.name.lower()}.txt")
         print(resp.text()[:2000])
         return 0 if resp.ok else 1
 
@@ -249,30 +283,24 @@ def _cmd_template_native(settings, args) -> int:
 def _cmd_templates(args) -> int:
     if args.templates_cmd == "list":
         for info in list_templates():
-            tag = " [PJM custom]" if info.pjm_custom else ""
-            print(f"{info.name:20} {info.type:8}{tag}  {info.description}")
+            print(f"{info.name:20} {info.description}")
         return 0
     info = get_template_info(args.name)
     if not info:
         print(f"Unknown template: {args.name}")
         return 1
-    print(f"Name:        {info.name}")
-    print(f"Type:        {info.type}")
-    print(f"Methods:     {', '.join(info.supported_methods)}")
-    print(f"NAESB:       {info.naesb_version_default}")
-    print(f"Description: {info.description}")
-    if info.common_params:
-        print("Common params:")
-        for k, v in info.common_params.items():
-            print(f"  {k}={v}")
+    print(json.dumps(info.__dict__, indent=2, default=list))
     return 0
 
 
-def _cmd_cli_install(args) -> int:
-    jar = install_cli_zip(Path(args.dir).expanduser(), force=args.force)
-    print(f"Installed: {jar}")
-    print(f"Set PJM_CLI_JAR_PATH={jar}")
-    return 0
+def _handle_error(exc: Exception) -> int:
+    if isinstance(exc, PJMError):
+        print(f"Error: {exc}", file=sys.stderr)
+        if exc.fix:
+            print(f"Fix:  {exc.fix}", file=sys.stderr)
+        return 1
+    print(f"Error: {exc}", file=sys.stderr)
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -280,16 +308,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     configure_logging(verbose=args.verbose, quiet=args.quiet)
 
-    if args.command == "templates":
-        return _cmd_templates(args)
-    if args.command == "cli":
-        return _cmd_cli_install(args)
-
-    settings = _load_from_args(args)
-
     try:
+        if args.command == "init":
+            return _cmd_init()
+        if args.command == "templates":
+            return _cmd_templates(args)
+        if args.command == "cli":
+            jar = install_cli_zip(Path(args.dir).expanduser(), force=args.force)
+            print(f"Installed: {jar}")
+            return 0
+        if args.command == "credentials":
+            return _cmd_credentials(args)
+
+        settings = _load_from_args(args)
+
         if args.command == "config":
             return _cmd_config(settings)
+        if args.command == "doctor":
+            return _cmd_doctor(settings)
         if args.command == "cert-doctor":
             return _cmd_cert_doctor(settings, args)
         if args.command == "auth-check":
@@ -300,9 +336,6 @@ def main(argv: list[str] | None = None) -> int:
         if settings.backend == "cli":
             backend = CliBackend(settings)
             if args.command == "smoke":
-                if args.all:
-                    results = backend.run_all_smoke_tests()
-                    return 0 if all(results.values()) else 1
                 ok = backend.smoke_test(
                     timeout_sec=args.timeout_sec,
                     print_results=not args.quiet,
@@ -313,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
                 params = parse_key_value_pairs(args.query_param)
                 if args.output_format:
                     params["OUTPUT_FORMAT"] = args.output_format
-                result = backend.run_template(
+                return backend.run_template(
                     template=args.name,
                     outfile=args.outfile,
                     timeout_sec=args.timeout_sec,
@@ -322,8 +355,7 @@ def main(argv: list[str] | None = None) -> int:
                     continuation_flag=args.continuation_flag,
                     method=args.method,
                     print_results=not args.quiet,
-                )
-                return result.returncode
+                ).returncode
 
         if args.command == "smoke":
             return _cmd_smoke_native(settings, args)
@@ -331,13 +363,9 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_template_native(settings, args)
 
     except PJMError as exc:
-        logger.error(str(exc))
-        if exc.hint:
-            logger.error(exc.hint)
-        return 1
+        return _handle_error(exc)
     except (ValueError, FileNotFoundError) as exc:
-        logger.error(str(exc))
-        return 2
+        return _handle_error(exc)
 
     print(f"Unknown command: {args.command}", file=sys.stderr)
     return 2

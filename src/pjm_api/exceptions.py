@@ -4,42 +4,43 @@
 class PJMError(Exception):
     """Base exception for PJM API errors."""
 
-    def __init__(self, message: str, *, hint: str = "") -> None:
+    def __init__(self, message: str, *, fix: str = "") -> None:
         super().__init__(message)
-        self.hint = hint
+        self.fix = fix
+
+    @property
+    def hint(self) -> str:
+        return self.fix
 
 
 class PJMConfigError(PJMError):
-    """Raised when configuration is missing or invalid."""
-
     def __init__(self, message: str) -> None:
-        super().__init__(message, hint="Run: pjm-api config")
+        super().__init__(message, fix="Run: pjm-api init")
 
 
 class PJMCertificateError(PJMError):
-    """Raised when certificate handling fails."""
-
     def __init__(self, message: str) -> None:
-        super().__init__(message, hint="Run: pjm-api cert-doctor")
+        super().__init__(message, fix="Run: pjm-api doctor")
 
 
 class PJMAuthError(PJMError):
-    """Raised when authentication fails."""
-
     def __init__(self, message: str) -> None:
-        super().__init__(message, hint="Run: pjm-api auth-check")
+        super().__init__(
+            message,
+            fix="Check username/password and CAM approval in Account Manager",
+        )
 
 
 class PJMSessionError(PJMError):
-    """Raised when session/token handling fails."""
-
     def __init__(self, message: str) -> None:
-        super().__init__(message, hint="Re-authenticate with pjm-api auth-check")
+        super().__init__(message, fix="Run: pjm-api doctor")
 
 
 class PJMOasisError(PJMError):
-    """Raised when OASIS template requests fail."""
+    def __init__(self, message: str) -> None:
+        super().__init__(message, fix="Run: pjm-api doctor")
 
 
 class PJMTimeoutError(PJMError):
-    """Raised when a request or subprocess times out."""
+    def __init__(self, message: str) -> None:
+        super().__init__(message, fix="Retry or increase PJM_TIMEOUT_SEC")

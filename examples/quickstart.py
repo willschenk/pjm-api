@@ -1,11 +1,10 @@
-"""Quickstart: authenticate and run TRANSSERV on TRAIN."""
+"""Quickstart — requires pjm-api init first."""
 
 from pjm_api import OasisClient, load_settings
 
 
 def main() -> None:
-    settings = load_settings()
-    with OasisClient(settings) as client:
+    with OasisClient(load_settings()) as client:
         response = client.smoke_transserv()
         print(response.text()[:500])
 

@@ -38,7 +38,7 @@ def test_load_settings_from_env(monkeypatch):
     monkeypatch.setenv("PJM_ENV", "TRAIN")
     monkeypatch.setenv("PJM_BACKEND", "native")
 
-    settings = load_settings()
+    settings = load_settings(use_credentials_file=False)
     assert settings.username == "user"
     assert settings.backend == "native"
     assert settings.sso_url == SSO_URLS["TRAIN"]
@@ -49,7 +49,7 @@ def test_legacy_cli_env_aliases(monkeypatch):
     monkeypatch.setenv("PJM_CLI_PASSWORD", "legacy-pass")
     monkeypatch.setenv("PJM_CLI_CERTIFICATE", "/tmp/legacy.p12|legacy-pw")
 
-    settings = load_settings()
+    settings = load_settings(use_credentials_file=False)
     assert settings.username == "legacy-user"
     assert settings.certificate_legacy() == "/tmp/legacy.p12|legacy-pw"
 

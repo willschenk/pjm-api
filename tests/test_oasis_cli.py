@@ -1,6 +1,6 @@
+from pjm_api.config import get_env_url
 from pjm_api.oasis_cli import (
     filename_only,
-    get_env_url,
     mask_command_for_display,
     normalize_template_name,
     parse_key_value_pairs,

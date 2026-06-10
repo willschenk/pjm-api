@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pjm-api"
-version = "1.0.0"
+version = "1.1.0"
 description = "Python client for the PJM OASIS API with PKI certificate authentication"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -12,20 +12,17 @@ from pjm_api.exceptions import PJMConfigError
 
 Backend = Literal["native", "cli"]
 
-# Public OASIS environments documented by PJM.
 OASIS_URLS: dict[str, str] = {
     "TRAIN": "https://oasis.ac1train.pjm.com/OASIS/",
     "PRODUCTION": "https://pjmoasis.pjm.com/OASIS/",
 }
 
-# Additional environments; available via explicit name or override.
 EXTENDED_OASIS_URLS: dict[str, str] = {
     **OASIS_URLS,
     "TEST": "https://oasis.test.pjm.com/OASIS/",
     "STAGE": "https://oasis.ac1stage.pjm.com/OASIS/",
 }
 
-# SSO certificate-auth endpoints mapped from OASIS environment.
 SSO_URLS: dict[str, str] = {
     "TRAIN": "https://sotrain.pjm.com/access/authenticate/pjmauthcert",
     "PRODUCTION": "https://sso.pjm.com/access/authenticate/pjmauthcert",
@@ -54,17 +51,12 @@ def _env(*names: str, default: str = "") -> str:
 
 
 def parse_certificate(value: str) -> tuple[Path, str | None]:
-    """Parse `path` or legacy `path|password` certificate settings."""
     raw = (value or "").strip()
     if not raw:
         raise ValueError("Certificate path is required.")
-
     if "|" in raw:
         path_part, password_part = raw.split("|", 1)
-        path = Path(path_part.strip()).expanduser()
-        password = password_part or None
-        return path, password
-
+        return Path(path_part.strip()).expanduser(), password_part or None
     return Path(raw).expanduser(), None
 
 
@@ -81,8 +73,7 @@ def resolve_sso_url(environment: str, custom_url: str = "") -> str:
 def resolve_logout_url(environment: str, custom_url: str = "") -> str:
     if custom_url:
         return custom_url
-    env_key = environment.upper()
-    return SSO_LOGOUT_URLS.get(env_key, SSO_LOGOUT_URLS["PRODUCTION"])
+    return SSO_LOGOUT_URLS.get(environment.upper(), SSO_LOGOUT_URLS["PRODUCTION"])
 
 
 def resolve_oasis_url(environment: str, custom_url: str = "") -> str:
@@ -96,8 +87,16 @@ def resolve_oasis_url(environment: str, custom_url: str = "") -> str:
 
 
 def get_env_url(env: str | None) -> str:
-    """Return the base OASIS URL for an environment name."""
     return resolve_oasis_url(env or DEFAULT_ENVIRONMENT)
+
+
+def _pfx_installed() -> bool:
+    try:
+        import cryptography  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -126,21 +125,34 @@ class PJMSettings:
     def missing_for_backend(self) -> list[str]:
         missing: list[str] = []
         if not self.username:
-            missing.append("PJM_USERNAME")
+            missing.append("username")
         if not self.password:
-            missing.append("PJM_PASSWORD")
+            missing.append("password")
         if not self.certificate_path:
-            missing.append("PJM_CERT")
+            missing.append("cert_path")
         if self.backend == "cli" and not self.jar_path:
             missing.append("PJM_CLI_JAR_PATH")
         return missing
 
-    def validate(self) -> None:
+    def preflight(self) -> None:
         missing = self.missing_for_backend()
         if missing:
-            raise PJMConfigError("Missing required configuration: " + ", ".join(missing))
-        if self.certificate_path and not self.certificate_path.exists():
-            raise PJMConfigError(f"Certificate file not found: {self.certificate_path}")
+            raise PJMConfigError(
+                f"Missing: {', '.join(missing)}. Run: pjm-api init"
+            )
+        if not self.certificate_path:
+            raise PJMConfigError("cert_path not set. Run: pjm-api init")
+        if not self.certificate_path.exists():
+            raise PJMConfigError(
+                f"Certificate not found: {self.certificate_path}. Run: pjm-api init"
+            )
+        if self.certificate_path.suffix.lower() in {".p12", ".pfx"} and not _pfx_installed():
+            raise PJMConfigError(
+                "PKCS#12 requires [pfx] extra: pip install pjm-api[pfx]"
+            )
+
+    def validate(self) -> None:
+        self.preflight()
 
 
 def load_settings(
@@ -157,37 +169,57 @@ def load_settings(
     jar_path: str = "",
     downloads_dir: str = "",
     timeout_sec: int = 0,
+    use_credentials_file: bool = True,
+    prompt_unlock: bool = True,
 ) -> PJMSettings:
-    """Load settings from explicit arguments with environment-variable fallbacks."""
-    resolved_username = username or _env("PJM_USERNAME", "PJM_CLI_USER")
-    resolved_password = password or _env("PJM_PASSWORD", "PJM_CLI_PASSWORD")
+    """Load settings: CLI args > encrypted file > .env > legacy aliases."""
+    creds = None
+    if use_credentials_file:
+        from pjm_api.unlock import load_unlocked_credentials
 
-    cert_raw = certificate or _env("PJM_CERT", "PJM_CLI_CERTIFICATE", "PJM_CERTIFICATE")
+        creds = load_unlocked_credentials(prompt=prompt_unlock)
+
+    resolved_username = username or (creds.username if creds else "") or _env(
+        "PJM_USERNAME", "PJM_CLI_USER"
+    )
+    resolved_password = password or (creds.password if creds else "") or _env(
+        "PJM_PASSWORD", "PJM_CLI_PASSWORD"
+    )
+    resolved_environment = (
+        environment
+        or (creds.environment if creds else "")
+        or _env("PJM_ENV", default=DEFAULT_ENVIRONMENT)
+    ).upper()
+
     cert_password_override = certificate_password or _env("PJM_CERT_PASSWORD")
-
-    if cert_raw:
-        cert_path, cert_password = parse_certificate(cert_raw)
-        if cert_password_override:
-            cert_password = cert_password_override
+    if creds and creds.cert_path:
+        cert_path = Path(creds.cert_path).expanduser()
+        cert_password = creds.cert_password or cert_password_override or None
     else:
-        cert_path_raw = _env("PJM_CERT_PATH")
-        cert_path = Path(cert_path_raw).expanduser() if cert_path_raw else None
-        cert_password = cert_password_override or None
+        cert_raw = certificate or _env("PJM_CERT", "PJM_CLI_CERTIFICATE", "PJM_CERTIFICATE")
+        if cert_raw:
+            cert_path, cert_password = parse_certificate(cert_raw)
+            if cert_password_override:
+                cert_password = cert_password_override
+        else:
+            cert_path_raw = _env("PJM_CERT_PATH")
+            cert_path = Path(cert_path_raw).expanduser() if cert_path_raw else None
+            cert_password = cert_password_override or None
 
-    resolved_environment = (environment or _env("PJM_ENV", default=DEFAULT_ENVIRONMENT)).upper()
     resolved_backend = (backend or _env("PJM_BACKEND", default="native")).lower()
     if resolved_backend not in ("native", "cli"):
         raise PJMConfigError("PJM_BACKEND must be 'native' or 'cli'.")
 
     custom_oasis = oasis_url or _env("PJM_OASIS_URL")
     custom_sso = sso_url or _env("PJM_SSO_URL")
-
     resolved_java = java_path or _env("PJM_CLI_JAVA_PATH") or shutil.which("java") or "java"
     resolved_jar = jar_path or _env("PJM_CLI_JAR_PATH")
     resolved_downloads = Path(
         downloads_dir or _env("PJM_CLI_DOWNLOADS", default=str(DEFAULT_DOWNLOADS))
     ).expanduser()
-    resolved_timeout = timeout_sec or int(_env("PJM_TIMEOUT_SEC", default=str(DEFAULT_TIMEOUT_SEC)))
+    resolved_timeout = timeout_sec or int(
+        _env("PJM_TIMEOUT_SEC", default=str(DEFAULT_TIMEOUT_SEC))
+    )
 
     return PJMSettings(
         username=resolved_username,
@@ -207,7 +239,6 @@ def load_settings(
 
 
 def apply_settings_to_env(settings: PJMSettings) -> None:
-    """Publish resolved settings to process env for legacy CLI modules."""
     os.environ["PJM_CLI_USER"] = settings.username
     os.environ["PJM_CLI_PASSWORD"] = settings.password
     os.environ["PJM_CLI_CERTIFICATE"] = settings.certificate_legacy()
