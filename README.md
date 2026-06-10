@@ -89,6 +89,12 @@ pjm-api credentials show                    # redacted summary
 
 ## Troubleshooting
 
+Check local setup without contacting PJM:
+
+```bash
+pjm-api doctor --offline
+```
+
 ```mermaid
 flowchart TD
     start[doctor failed] --> s1{credentials file?}

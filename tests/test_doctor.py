@@ -69,6 +69,46 @@ def test_format_doctor_report_success_has_no_fix_lines():
     assert "All checks passed." in report
 
 
+def test_format_doctor_report_offline_success():
+    steps = [
+        DoctorStep("credentials file", True, "/tmp/credentials.enc"),
+        DoctorStep("certificate file", True, "expires 2026-01-01"),
+    ]
+    report = format_doctor_report(steps, passed=True, offline=True)
+    assert "Offline checks passed. Network checks skipped." in report
+    assert "All checks passed." not in report
+
+
+def test_doctor_offline_skips_network_checks(creds_file, monkeypatch):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    settings = load_settings(prompt_unlock=False)
+
+    with patch("pjm_api.doctor.inspect_certificate") as mock_inspect, patch(
+        "pjm_api.doctor.OasisClient"
+    ) as mock_client:
+        mock_inspect.return_value.healthy = True
+        mock_inspect.return_value.errors = ()
+        mock_inspect.return_value.not_after = None
+        steps, passed = run_doctor(settings, offline=True)
+
+    mock_client.assert_not_called()
+    assert passed
+    assert len(steps) == 2
+    assert steps[0].name == "credentials file"
+    assert steps[1].name == "certificate file"
+    assert not any("SSO" in step.name or "TRANSSERV" in step.name for step in steps)
+
+
+def test_doctor_offline_still_fails_local_errors(monkeypatch):
+    monkeypatch.delenv("PJM_CREDENTIALS_FILE", raising=False)
+    settings = load_settings(use_credentials_file=False)
+    with patch("pjm_api.doctor.OasisClient") as mock_client:
+        steps, passed = run_doctor(settings, offline=True)
+    mock_client.assert_not_called()
+    assert not passed
+    assert steps[0].name == "credentials file"
+
+
 def test_doctor_sso_step(creds_file, monkeypatch, tmp_path):
     monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
     settings = load_settings(prompt_unlock=False)

@@ -27,7 +27,7 @@ def _pfx_available() -> bool:
         return False
 
 
-def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
+def run_doctor(settings: PJMSettings, *, offline: bool = False) -> tuple[list[DoctorStep], bool]:
     steps: list[DoctorStep] = []
 
     cred_path = credentials_path()
@@ -97,6 +97,9 @@ def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
         expiry = f"expires {report.not_after.date().isoformat()}"
     steps.append(DoctorStep("certificate file", True, expiry))
 
+    if offline:
+        return steps, True
+
     try:
         with OasisClient(settings) as client:
             client.authenticate()
@@ -141,7 +144,9 @@ def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
     return steps, True
 
 
-def format_doctor_report(steps: list[DoctorStep], passed: bool) -> str:
+def format_doctor_report(
+    steps: list[DoctorStep], passed: bool, *, offline: bool = False
+) -> str:
     lines = []
     for i, step in enumerate(steps, 1):
         status = "OK" if step.ok else "FAIL"
@@ -150,5 +155,10 @@ def format_doctor_report(steps: list[DoctorStep], passed: bool) -> str:
         if not step.ok and step.fix:
             lines.append(f"      Fix: {step.fix}")
     lines.append("")
-    lines.append("All checks passed." if passed else "Doctor failed. See docs/troubleshooting.md")
+    if passed and offline:
+        lines.append("Offline checks passed. Network checks skipped.")
+    elif passed:
+        lines.append("All checks passed.")
+    else:
+        lines.append("Doctor failed. See docs/troubleshooting.md")
     return "\n".join(lines)

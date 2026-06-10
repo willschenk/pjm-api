@@ -138,6 +138,19 @@ def test_doctor_prompts_for_credential_unlock():
     assert mock_load.call_args.kwargs["prompt_unlock"] is True
 
 
+def test_doctor_offline_passes_flag_to_run_doctor():
+    mock_settings = MagicMock()
+    with patch("pjm_api.cli.load_settings", return_value=mock_settings), patch(
+        "pjm_api.cli.run_doctor", return_value=([], True)
+    ) as mock_run, patch("pjm_api.cli.format_doctor_report", return_value="report") as mock_format:
+        code = main(
+            ["doctor", "--offline", "--username", "u", "--password", "p", "--cert", "/tmp/cert.pem"]
+        )
+    assert code == 0
+    mock_run.assert_called_once_with(mock_settings, offline=True)
+    mock_format.assert_called_once_with([], True, offline=True)
+
+
 def test_cert_doctor_prompts_for_credential_unlock():
     mock_settings = MagicMock()
     mock_settings.certificate_path = "/tmp/cert.p12"

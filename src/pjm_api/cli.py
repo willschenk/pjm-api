@@ -61,7 +61,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     init = sub.add_parser("init", help="Create encrypted credentials file.")
     init.add_argument("--force", action="store_true")
-    sub.add_parser("doctor", parents=[shared], help="Run all setup checks.")
+    doctor = sub.add_parser("doctor", parents=[shared], help="Run all setup checks.")
+    doctor.add_argument(
+        "--offline",
+        action="store_true",
+        help="Check local credentials and certificate only; skip network calls.",
+    )
     creds = sub.add_parser("credentials", help="Manage credentials file.")
     creds_sub = creds.add_subparsers(dest="credentials_cmd", required=True)
     creds_sub.add_parser("show", help="Show redacted credentials summary.")
@@ -202,9 +207,9 @@ def _cmd_credentials(args) -> int:
     return 2
 
 
-def _cmd_doctor(settings) -> int:
-    steps, passed = run_doctor(settings)
-    print(format_doctor_report(steps, passed))
+def _cmd_doctor(settings, args) -> int:
+    steps, passed = run_doctor(settings, offline=args.offline)
+    print(format_doctor_report(steps, passed, offline=args.offline))
     return 0 if passed else 1
 
 
@@ -366,7 +371,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "config":
             return _cmd_config(settings)
         if args.command == "doctor":
-            return _cmd_doctor(settings)
+            return _cmd_doctor(settings, args)
         if args.command == "cert-doctor":
             return _cmd_cert_doctor(settings, args)
         if args.command == "auth-check":
