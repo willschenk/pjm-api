@@ -295,7 +295,8 @@ def _cmd_smoke_native(settings, args) -> int:
 
 
 def _cmd_template_native(settings, args) -> int:
-    settings.downloads_dir.mkdir(parents=True, exist_ok=True)
+    if args.outfile:
+        settings.downloads_dir.mkdir(parents=True, exist_ok=True)
     params = parse_key_value_pairs(args.query_param)
     with OasisClient(settings) as client:
         resp = client.request(
@@ -306,7 +307,7 @@ def _cmd_template_native(settings, args) -> int:
             continuation_flag=args.continuation_flag,
             action_override=args.action,
         )
-        _save_response(resp, settings, args.save, args.outfile or f"{args.name.lower()}.txt")
+        _save_response(resp, settings, args.save, args.outfile)
         print(resp.text()[:2000])
         return 0 if resp.ok else 1
 

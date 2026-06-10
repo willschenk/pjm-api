@@ -79,7 +79,9 @@ with OasisClient(load_settings()) as client:
 
 ```bash
 pjm-api doctor                              # verify setup
-pjm-api template TRANSSERV                  # query on TRAIN
+pjm-api template TRANSSERV                  # print preview to stdout
+pjm-api template TRANSSERV --outfile result.txt  # save to downloads/
+pjm-api template TRANSSERV --save /tmp/result.txt  # save to exact path
 pjm-api template TRANSSERV --env PRODUCTION # production (advanced)
 pjm-api credentials show                    # redacted summary
 ```

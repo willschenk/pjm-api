@@ -1,6 +1,99 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from pjm_api.cli import main
+
+
+def _template_settings(downloads_dir: Path):
+    settings = MagicMock()
+    settings.backend = "native"
+    settings.validate = MagicMock()
+    settings.downloads_dir = downloads_dir
+    return settings
+
+
+def _template_response():
+    resp = MagicMock()
+    resp.ok = True
+    resp.text.return_value = "template-preview"
+    resp.save.return_value = Path("/saved/path")
+    return resp
+
+
+def _run_template(argv, downloads_dir: Path):
+    settings = _template_settings(downloads_dir)
+    resp = _template_response()
+    with patch("pjm_api.cli.load_settings", return_value=settings), patch(
+        "pjm_api.cli.OasisClient"
+    ) as mock_client_class:
+        mock_client = mock_client_class.return_value
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.request.return_value = resp
+        code = main(argv)
+    return code, resp
+
+
+def test_template_without_save_flags_does_not_write_file(tmp_path, capsys):
+    downloads = tmp_path / "downloads"
+    argv = [
+        "template",
+        "TRANSSERV",
+        "--username",
+        "u",
+        "--password",
+        "p",
+        "--cert",
+        "/tmp/cert.pem",
+    ]
+    code, resp = _run_template(argv, downloads)
+    captured = capsys.readouterr()
+    assert code == 0
+    resp.save.assert_not_called()
+    assert "Saved:" not in captured.out
+    assert "template-preview" in captured.out
+    resp.text.assert_called_once()
+
+
+def test_template_outfile_saves_to_downloads_dir(tmp_path, capsys):
+    downloads = tmp_path / "downloads"
+    argv = [
+        "template",
+        "TRANSSERV",
+        "--username",
+        "u",
+        "--password",
+        "p",
+        "--cert",
+        "/tmp/cert.pem",
+        "--outfile",
+        "result.txt",
+    ]
+    code, resp = _run_template(argv, downloads)
+    assert code == 0
+    resp.save.assert_called_once_with(downloads / "result.txt")
+    assert "Saved:" in capsys.readouterr().out
+
+
+def test_template_save_uses_exact_path(tmp_path, capsys):
+    downloads = tmp_path / "downloads"
+    save_path = tmp_path / "result.txt"
+    argv = [
+        "template",
+        "TRANSSERV",
+        "--username",
+        "u",
+        "--password",
+        "p",
+        "--cert",
+        "/tmp/cert.pem",
+        "--save",
+        str(save_path),
+    ]
+    code, resp = _run_template(argv, downloads)
+    assert code == 0
+    resp.save.assert_called_once_with(save_path)
+    assert "Saved:" in capsys.readouterr().out
 
 
 def test_doctor_prompts_for_credential_unlock():
