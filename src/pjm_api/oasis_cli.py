@@ -208,10 +208,10 @@ def parse_key_value_pairs(values: list[str] | None) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for item in values or []:
         if "=" not in item:
-            raise ValueError(f"Query parameter must be KEY=VALUE, got {item!r}")
+            raise ValueError(f"Invalid query parameter {item!r}. Use KEY=VALUE.")
         key, value = item.split("=", 1)
         key = key.strip()
         if not key:
-            raise ValueError(f"Query parameter key cannot be empty: {item!r}")
+            raise ValueError(f"Invalid query parameter {item!r}. Key cannot be empty.")
         parsed[key] = value
     return parsed

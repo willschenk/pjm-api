@@ -96,6 +96,20 @@ def test_template_negative_preview_chars_fails():
         main(_template_argv(preview_chars=-1))
 
 
+def test_template_invalid_query_param_fails_before_request(tmp_path, capsys):
+    downloads = tmp_path / "downloads"
+    argv = _template_argv()
+    argv.extend(["--query-param", "BAD"])
+    with patch("pjm_api.cli.load_settings", return_value=_template_settings(downloads)), patch(
+        "pjm_api.cli.OasisClient"
+    ) as mock_client_class:
+        code = main(argv)
+    captured = capsys.readouterr()
+    assert code == 2
+    mock_client_class.assert_not_called()
+    assert "Invalid query parameter 'BAD'. Use KEY=VALUE." in captured.err
+
+
 def test_template_outfile_saves_to_downloads_dir(tmp_path, capsys):
     downloads = tmp_path / "downloads"
     argv = _template_argv(outfile="result.txt")

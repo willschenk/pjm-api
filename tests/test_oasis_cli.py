@@ -1,3 +1,5 @@
+import pytest
+
 from pjm_api.config import get_env_url
 from pjm_api.oasis_cli import (
     filename_only,
@@ -52,5 +54,27 @@ def test_qualify_result_with_criteria():
     assert not qualify_result_with_criteria(1, "SUCCESS", "", code_equals=0)
 
 
-def test_parse_key_value_pairs():
-    assert parse_key_value_pairs(["OUTPUT_FORMAT=DATA"]) == {"OUTPUT_FORMAT": "DATA"}
+def test_parse_key_value_pairs_valid():
+    assert parse_key_value_pairs(["RETURN_TZ=EP"]) == {"RETURN_TZ": "EP"}
+
+
+def test_parse_key_value_pairs_allows_empty_value():
+    assert parse_key_value_pairs(["OUTPUT_FORMAT="]) == {"OUTPUT_FORMAT": ""}
+
+
+def test_parse_key_value_pairs_missing_equals_sign():
+    with pytest.raises(ValueError, match=r"Invalid query parameter 'BAD'\. Use KEY=VALUE\."):
+        parse_key_value_pairs(["BAD"])
+
+
+def test_parse_key_value_pairs_empty_key():
+    with pytest.raises(
+        ValueError, match=r"Invalid query parameter '=VALUE'\. Key cannot be empty\."
+    ):
+        parse_key_value_pairs(["=VALUE"])
+
+
+def test_parse_key_value_pairs_duplicate_keys_last_value_wins():
+    assert parse_key_value_pairs(["OUTPUT_FORMAT=DATA", "OUTPUT_FORMAT=JSON"]) == {
+        "OUTPUT_FORMAT": "JSON"
+    }
