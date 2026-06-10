@@ -19,6 +19,8 @@ pjm-api template TRANSSERV
 
 No network yet? Run `pjm-api doctor --offline` to check local credentials and certificate only.
 
+After setup, run `pjm-api guide` to see API call options and available templates.
+
 Expected `doctor` output:
 
 ```
@@ -86,6 +88,7 @@ See [docs/python-usage.md](docs/python-usage.md) for template queries, saving re
 ```bash
 pjm-api doctor                              # verify setup (network checks)
 pjm-api doctor --offline                    # local credentials and cert only
+pjm-api guide                               # API call options and templates
 pjm-api smoke                               # TRANSSERV smoke test
 pjm-api template TRANSSERV                  # print preview to stdout
 pjm-api template TRANSSERV --preview-chars 500  # shorter preview

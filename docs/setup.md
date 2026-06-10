@@ -95,6 +95,14 @@ pjm-api template TRANSSERV --save /tmp/transserv.txt
 
 To save the response inside the downloads directory, use `--outfile`. To save to an exact path, use `--save`.
 
+## API call options
+
+```bash
+pjm-api guide
+```
+
+This lists smoke tests, template queries, parameter hints, and every template in the catalog.
+
 ## Common mistakes
 
 | Mistake | What happens | Fix |

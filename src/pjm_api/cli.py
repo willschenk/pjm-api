@@ -21,6 +21,7 @@ from pjm_api.credentials import (
 )
 from pjm_api.doctor import format_doctor_report, run_doctor
 from pjm_api.exceptions import PJMError
+from pjm_api.guide import format_api_guide
 from pjm_api.logging_utils import configure_logging, get_logger
 from pjm_api.oasis import OasisClient
 from pjm_api.oasis_cli import parse_key_value_pairs
@@ -29,7 +30,7 @@ from pjm_api.unlock import clear_unlock_cache
 
 logger = get_logger()
 
-NO_UNLOCK_COMMANDS = frozenset({"init", "templates", "cli", "config", "credentials"})
+NO_UNLOCK_COMMANDS = frozenset({"init", "templates", "cli", "config", "credentials", "guide"})
 
 
 def _non_negative_int(value: str) -> int:
@@ -67,6 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Check local credentials and certificate only; skip network calls.",
     )
+    sub.add_parser("guide", help="Show API call options and available templates.")
     creds = sub.add_parser("credentials", help="Manage credentials file.")
     creds_sub = creds.add_subparsers(dest="credentials_cmd", required=True)
     creds_sub.add_parser("show", help="Show redacted credentials summary.")
@@ -169,7 +171,9 @@ def _cmd_init(args) -> int:
     )
     path = save_credentials(data, master)
     print(f"\nSaved: {path}")
-    print("Next: pjm-api doctor")
+    print("Next:")
+    print("  pjm-api doctor    verify setup")
+    print("  pjm-api guide     see API call options")
     return 0
 
 
@@ -210,7 +214,14 @@ def _cmd_credentials(args) -> int:
 def _cmd_doctor(settings, args) -> int:
     steps, passed = run_doctor(settings, offline=args.offline)
     print(format_doctor_report(steps, passed, offline=args.offline))
+    if passed:
+        print("Next: pjm-api guide")
     return 0 if passed else 1
+
+
+def _cmd_guide() -> int:
+    print(format_api_guide())
+    return 0
 
 
 def _load_from_args(args: argparse.Namespace, *, prompt_unlock: bool = True):
@@ -365,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "credentials":
             return _cmd_credentials(args)
+        if args.command == "guide":
+            return _cmd_guide()
 
         settings = _load_from_args(args)
 
