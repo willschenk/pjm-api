@@ -77,6 +77,8 @@ with OasisClient(load_settings()) as client:
     print(client.smoke_transserv().text()[:500])
 ```
 
+See [docs/python-usage.md](docs/python-usage.md) for template queries, saving responses, and credential handling.
+
 ## CLI
 
 ```bash
