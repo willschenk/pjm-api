@@ -144,9 +144,7 @@ def run_doctor(settings: PJMSettings, *, offline: bool = False) -> tuple[list[Do
     return steps, True
 
 
-def format_doctor_report(
-    steps: list[DoctorStep], passed: bool, *, offline: bool = False
-) -> str:
+def format_doctor_report(steps: list[DoctorStep], passed: bool, *, offline: bool = False) -> str:
     lines = []
     for i, step in enumerate(steps, 1):
         status = "OK" if step.ok else "FAIL"

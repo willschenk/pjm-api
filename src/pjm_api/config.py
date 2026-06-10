@@ -137,9 +137,7 @@ class PJMSettings:
     def preflight(self) -> None:
         missing = self.missing_for_backend()
         if missing:
-            raise PJMConfigError(
-                f"Missing: {', '.join(missing)}. Run: pjm-api init"
-            )
+            raise PJMConfigError(f"Missing: {', '.join(missing)}. Run: pjm-api init")
         if not self.certificate_path:
             raise PJMConfigError("cert_path not set. Run: pjm-api init")
         if not self.certificate_path.exists():
@@ -147,9 +145,7 @@ class PJMSettings:
                 f"Certificate not found: {self.certificate_path}. Run: pjm-api init"
             )
         if self.certificate_path.suffix.lower() in {".p12", ".pfx"} and not _pfx_installed():
-            raise PJMConfigError(
-                "PKCS#12 requires [pfx] extra: pip install pjm-api[pfx]"
-            )
+            raise PJMConfigError("PKCS#12 requires [pfx] extra: pip install pjm-api[pfx]")
 
     def validate(self) -> None:
         self.preflight()
@@ -179,11 +175,11 @@ def load_settings(
 
         creds = load_unlocked_credentials(prompt=prompt_unlock)
 
-    resolved_username = username or (creds.username if creds else "") or _env(
-        "PJM_USERNAME", "PJM_CLI_USER"
+    resolved_username = (
+        username or (creds.username if creds else "") or _env("PJM_USERNAME", "PJM_CLI_USER")
     )
-    resolved_password = password or (creds.password if creds else "") or _env(
-        "PJM_PASSWORD", "PJM_CLI_PASSWORD"
+    resolved_password = (
+        password or (creds.password if creds else "") or _env("PJM_PASSWORD", "PJM_CLI_PASSWORD")
     )
     resolved_environment = (
         environment
@@ -218,9 +214,7 @@ def load_settings(
     resolved_downloads = Path(
         downloads_dir or _env("PJM_CLI_DOWNLOADS", default=str(DEFAULT_DOWNLOADS))
     ).expanduser()
-    resolved_timeout = timeout_sec or int(
-        _env("PJM_TIMEOUT_SEC", default=str(DEFAULT_TIMEOUT_SEC))
-    )
+    resolved_timeout = timeout_sec or int(_env("PJM_TIMEOUT_SEC", default=str(DEFAULT_TIMEOUT_SEC)))
 
     return PJMSettings(
         username=resolved_username,

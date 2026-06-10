@@ -83,9 +83,10 @@ def test_doctor_offline_skips_network_checks(creds_file, monkeypatch):
     monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
     settings = load_settings(prompt_unlock=False)
 
-    with patch("pjm_api.doctor.inspect_certificate") as mock_inspect, patch(
-        "pjm_api.doctor.OasisClient"
-    ) as mock_client:
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.OasisClient") as mock_client,
+    ):
         mock_inspect.return_value.healthy = True
         mock_inspect.return_value.errors = ()
         mock_inspect.return_value.not_after = None
@@ -113,9 +114,10 @@ def test_doctor_sso_step(creds_file, monkeypatch, tmp_path):
     monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
     settings = load_settings(prompt_unlock=False)
 
-    with patch("pjm_api.doctor.inspect_certificate") as mock_inspect, patch(
-        "pjm_api.doctor.OasisClient"
-    ) as mock_client:
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.OasisClient") as mock_client,
+    ):
         mock_inspect.return_value.healthy = True
         mock_inspect.return_value.errors = ()
         mock_inspect.return_value.not_after = None

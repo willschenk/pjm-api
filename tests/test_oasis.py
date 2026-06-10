@@ -1,4 +1,3 @@
-
 import pytest
 
 from pjm_api.exceptions import PJMOasisError

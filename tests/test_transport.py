@@ -30,12 +30,12 @@ def test_create_session_and_authenticate(tmp_path):
     cert = tmp_path / "c.pem"
     cert.write_text("x")
     settings = load_settings(username="u", password="p", certificate=str(cert))
-    normalized = NormalizedCertificate(
-        CertificateKind.PEM_KEYPAIR, b"c", b"k", cert
-    )
-    with patch("pjm_api.auth.normalize_certificate", return_value=normalized), patch(
-        "pjm_api.auth.create_ssl_context", return_value=ssl.create_default_context()
-    ), patch("pjm_api.auth.post_json", return_value={"tokenId": "abc"}):
+    normalized = NormalizedCertificate(CertificateKind.PEM_KEYPAIR, b"c", b"k", cert)
+    with (
+        patch("pjm_api.auth.normalize_certificate", return_value=normalized),
+        patch("pjm_api.auth.create_ssl_context", return_value=ssl.create_default_context()),
+        patch("pjm_api.auth.post_json", return_value={"tokenId": "abc"}),
+    ):
         session, token = authenticate(settings)
         assert token == "abc"
         session2 = create_session(settings)

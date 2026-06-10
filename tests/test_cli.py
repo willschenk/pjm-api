@@ -42,9 +42,10 @@ def _template_response(*, text: str = "template-preview", ok: bool = True):
 def _run_template(argv, downloads_dir: Path, *, text: str = "template-preview", ok: bool = True):
     settings = _template_settings(downloads_dir)
     resp = _template_response(text=text, ok=ok)
-    with patch("pjm_api.cli.load_settings", return_value=settings), patch(
-        "pjm_api.cli.OasisClient"
-    ) as mock_client_class:
+    with (
+        patch("pjm_api.cli.load_settings", return_value=settings),
+        patch("pjm_api.cli.OasisClient") as mock_client_class,
+    ):
         mock_client = mock_client_class.return_value
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
@@ -100,9 +101,10 @@ def test_template_invalid_query_param_fails_before_request(tmp_path, capsys):
     downloads = tmp_path / "downloads"
     argv = _template_argv()
     argv.extend(["--query-param", "BAD"])
-    with patch("pjm_api.cli.load_settings", return_value=_template_settings(downloads)), patch(
-        "pjm_api.cli.OasisClient"
-    ) as mock_client_class:
+    with (
+        patch("pjm_api.cli.load_settings", return_value=_template_settings(downloads)),
+        patch("pjm_api.cli.OasisClient") as mock_client_class,
+    ):
         code = main(argv)
     captured = capsys.readouterr()
     assert code == 2
@@ -131,8 +133,9 @@ def test_template_save_uses_exact_path(tmp_path, capsys):
 
 def test_doctor_prompts_for_credential_unlock():
     mock_settings = MagicMock()
-    with patch("pjm_api.cli.load_settings", return_value=mock_settings) as mock_load, patch(
-        "pjm_api.cli.run_doctor", return_value=([], False)
+    with (
+        patch("pjm_api.cli.load_settings", return_value=mock_settings) as mock_load,
+        patch("pjm_api.cli.run_doctor", return_value=([], False)),
     ):
         main(["doctor"])
     assert mock_load.call_args.kwargs["prompt_unlock"] is True
@@ -140,9 +143,11 @@ def test_doctor_prompts_for_credential_unlock():
 
 def test_doctor_offline_passes_flag_to_run_doctor():
     mock_settings = MagicMock()
-    with patch("pjm_api.cli.load_settings", return_value=mock_settings), patch(
-        "pjm_api.cli.run_doctor", return_value=([], True)
-    ) as mock_run, patch("pjm_api.cli.format_doctor_report", return_value="report") as mock_format:
+    with (
+        patch("pjm_api.cli.load_settings", return_value=mock_settings),
+        patch("pjm_api.cli.run_doctor", return_value=([], True)) as mock_run,
+        patch("pjm_api.cli.format_doctor_report", return_value="report") as mock_format,
+    ):
         code = main(
             ["doctor", "--offline", "--username", "u", "--password", "p", "--cert", "/tmp/cert.pem"]
         )
@@ -155,9 +160,10 @@ def test_cert_doctor_prompts_for_credential_unlock():
     mock_settings = MagicMock()
     mock_settings.certificate_path = "/tmp/cert.p12"
     mock_settings.certificate_password = "secret"
-    with patch("pjm_api.cli.load_settings", return_value=mock_settings) as mock_load, patch(
-        "pjm_api.cli.inspect_certificate"
-    ) as mock_inspect:
+    with (
+        patch("pjm_api.cli.load_settings", return_value=mock_settings) as mock_load,
+        patch("pjm_api.cli.inspect_certificate") as mock_inspect,
+    ):
         mock_inspect.return_value.healthy = True
         mock_inspect.return_value.path = "/tmp/cert.p12"
         mock_inspect.return_value.kind.value = "pkcs12"
@@ -178,8 +184,9 @@ def test_config_does_not_prompt_for_credential_unlock():
     mock_settings.password = ""
     mock_settings.certificate_path = ""
     mock_settings.missing_for_backend.return_value = []
-    with patch("pjm_api.cli.load_settings", return_value=mock_settings) as mock_load, patch(
-        "pjm_api.cli.credentials_exist", return_value=False
+    with (
+        patch("pjm_api.cli.load_settings", return_value=mock_settings) as mock_load,
+        patch("pjm_api.cli.credentials_exist", return_value=False),
     ):
         main(["config"])
     assert mock_load.call_args.kwargs["prompt_unlock"] is False

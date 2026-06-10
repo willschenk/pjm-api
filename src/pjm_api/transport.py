@@ -16,9 +16,7 @@ _AUTH_401_MESSAGE = (
     "Authentication failed (401). Check PJM username, password, environment, "
     "and CAM certificate approval."
 )
-_INVALID_JSON_MESSAGE = (
-    "Authentication response was not JSON. Check the SSO URL and environment."
-)
+_INVALID_JSON_MESSAGE = "Authentication response was not JSON. Check the SSO URL and environment."
 _BODY_SNIPPET_LIMIT = 200
 
 

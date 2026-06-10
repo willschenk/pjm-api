@@ -1,4 +1,3 @@
-
 from pjm_api.response import OasisResponse
 
 
