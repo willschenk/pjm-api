@@ -1,0 +1,43 @@
+{
+  "naesb_version_default": "3.3",
+  "templates": [
+    {
+      "name": "TRANSSERV",
+      "type": "query",
+      "supported_methods": ["GET"],
+      "description": "Transmission service product information query template.",
+      "common_params": {
+        "OUTPUT_FORMAT": "DATA",
+        "PRIMARY_PROVIDER_CODE": "PJM",
+        "PRIMARY_PROVIDER_DUNS": "073647877",
+        "RETURN_TZ": "EP",
+        "VERSION": "3.3"
+      },
+      "pjm_custom": false
+    },
+    {
+      "name": "pjmtransreq",
+      "type": "input",
+      "supported_methods": ["PUT"],
+      "description": "PJM custom template for original hourly service requests via CSV upload.",
+      "common_params": {},
+      "pjm_custom": true
+    },
+    {
+      "name": "pjmannulment",
+      "type": "input",
+      "supported_methods": ["POST", "PUT"],
+      "description": "PJM custom annulment template.",
+      "common_params": {},
+      "pjm_custom": true
+    },
+    {
+      "name": "pjmtsrcomment",
+      "type": "input",
+      "supported_methods": ["POST"],
+      "description": "PJM custom TSR comment template.",
+      "common_params": {},
+      "pjm_custom": true
+    }
+  ]
+}

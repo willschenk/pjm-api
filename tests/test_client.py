@@ -1,53 +1,40 @@
-from pathlib import Path
+import ssl
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pjm_api.auth import authenticate
-from pjm_api.client import PJMClient
-from pjm_api.exceptions import PJMAuthError
+from pjm_api.certs import CertificateKind, NormalizedCertificate
+from pjm_api.config import load_settings
+from pjm_api.oasis import OasisClient
 
 
-def test_authenticate_returns_token():
-    mock_response = MagicMock()
-    mock_response.ok = True
-    mock_response.json.return_value = {"tokenId": "abc123"}
+@pytest.fixture
+def settings(tmp_path):
+    cert = tmp_path / "cert.pem"
+    cert.write_text("dummy")
+    return load_settings(username="u", password="p", certificate=str(cert))
 
-    session = MagicMock()
-    session.post.return_value = mock_response
 
-    token = authenticate(
-        "user",
-        "pass",
-        ("/path/cert.crt", "/path/key.key"),
-        session=session,
+@pytest.fixture
+def normalized(tmp_path):
+    return NormalizedCertificate(
+        kind=CertificateKind.PEM_KEYPAIR,
+        cert_pem=b"c",
+        key_pem=b"k",
+        source_path=tmp_path / "cert.pem",
     )
 
-    assert token == "abc123"
-    session.post.assert_called_once()
 
+@patch("pjm_api.auth.post_json", return_value={"tokenId": "token123"})
+@patch("pjm_api.oasis.request")
+@patch("pjm_api.auth.create_ssl_context", return_value=ssl.create_default_context())
+def test_client_authenticates_before_request(
+    mock_ssl, mock_request, mock_auth, settings, normalized
+):
+    mock_request.return_value = MagicMock(status_code=200, content=b"ok", headers={})
+    from pjm_api.auth import PJMSession
 
-def test_authenticate_raises_on_failure():
-    mock_response = MagicMock()
-    mock_response.ok = False
-    mock_response.status_code = 401
-    mock_response.text = "Unauthorized"
-
-    session = MagicMock()
-    session.post.return_value = mock_response
-
-    with pytest.raises(PJMAuthError, match="Authentication failed"):
-        authenticate("user", "pass", ("/cert.crt", "/key.key"), session=session)
-
-
-@patch("pjm_api.client.authenticate", return_value="token123")
-def test_client_authenticates_before_request(mock_auth):
-    client = PJMClient("user", "pass", (Path("/cert.crt"), Path("/key.key")))
-    client._session.request = MagicMock(
-        return_value=MagicMock(status_code=200, ok=True)
-    )
-
-    response = client.get("https://example.pjm.com/api")
-
+    session = PJMSession(settings, normalized)
+    client = OasisClient(settings, session)
+    client.request("TRANSSERV", {})
     mock_auth.assert_called_once()
-    assert response.status_code == 200

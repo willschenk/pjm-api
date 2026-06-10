@@ -36,6 +36,10 @@ htmlcov/
 *.swp
 *.swo
 
+# Local private scripts and notes
+test.py
+GUIDANCE.md
+
 # Environment and secrets
 .env
 *.pem
