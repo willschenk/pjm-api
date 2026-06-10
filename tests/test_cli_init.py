@@ -9,7 +9,7 @@ from cryptography.x509.oid import NameOID
 
 from pjm_api.certs import CertificateKind, CertInspectionReport, inspect_certificate
 from pjm_api.cli import main
-from pjm_api.credentials import StoredCredentials, save_credentials
+from pjm_api.credentials import StoredCredentials, load_credentials, save_credentials
 
 
 def _public_cert_pem() -> bytes:
@@ -44,13 +44,66 @@ def _healthy_report(path: Path) -> CertInspectionReport:
     )
 
 
-def _run_successful_init(cred_path: Path, cert_path: Path, *, force: bool = False):
-    inputs = iter(["testuser", str(cert_path), "TRAIN"])
+def _run_init(
+    cred_path: Path,
+    cert_path: Path,
+    *,
+    env: str = "TRAIN",
+    force: bool = False,
+):
+    inputs = iter(["testuser", str(cert_path), env])
     argv = ["init", "--force"] if force else ["init"]
     with patch("builtins.input", lambda _: next(inputs)), patch(
         "getpass.getpass", side_effect=["testpass", "certpass", "master", "master"]
     ), patch("pjm_api.cli.inspect_certificate", return_value=_healthy_report(cert_path)):
         return main(argv)
+
+
+def _run_successful_init(cred_path: Path, cert_path: Path, *, force: bool = False):
+    return _run_init(cred_path, cert_path, force=force)
+
+
+def test_init_blank_environment_defaults_to_train(tmp_path, monkeypatch):
+    path = tmp_path / "credentials.enc"
+    cert_path = tmp_path / "login.p12"
+    cert_path.write_bytes(b"\x30\x82\x00\x01")
+    monkeypatch.setenv("PJM_CREDENTIALS_FILE", str(path))
+    code = _run_init(path, cert_path, env="")
+    assert code == 0
+    creds = load_credentials("master", path)
+    assert creds.environment == "TRAIN"
+
+
+def test_init_lowercase_production_saves_as_production(tmp_path, monkeypatch):
+    path = tmp_path / "credentials.enc"
+    cert_path = tmp_path / "login.p12"
+    cert_path.write_bytes(b"\x30\x82\x00\x01")
+    monkeypatch.setenv("PJM_CREDENTIALS_FILE", str(path))
+    code = _run_init(path, cert_path, env="production")
+    assert code == 0
+    creds = load_credentials("master", path)
+    assert creds.environment == "PRODUCTION"
+
+
+def test_init_rejects_invalid_environment(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "credentials.enc"
+    cert_path = tmp_path / "login.p12"
+    cert_path.write_bytes(b"\x30\x82\x00\x01")
+    monkeypatch.setenv("PJM_CREDENTIALS_FILE", str(path))
+    inputs = iter(["testuser", str(cert_path), "prodution"])
+    with patch("builtins.input", lambda _: next(inputs)), patch(
+        "getpass.getpass", side_effect=["testpass", "certpass"]
+    ), patch("pjm_api.cli.inspect_certificate", return_value=_healthy_report(cert_path)), patch(
+        "pjm_api.cli.save_credentials"
+    ) as mock_save:
+        code = main(["init"])
+    assert code == 2
+    assert not path.exists()
+    mock_save.assert_not_called()
+    err = capsys.readouterr().err
+    assert "Invalid environment: PRODUTION" in err
+    assert "PRODUCTION" in err
+    assert "TRAIN" in err
 
 
 def test_init_command(tmp_path, monkeypatch):

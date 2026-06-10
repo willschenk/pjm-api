@@ -134,7 +134,13 @@ def _cmd_init(args) -> int:
     for warning in report.warnings:
         print(f"WARN: {warning}")
 
-    env = input("Environment [TRAIN]: ").strip() or "TRAIN"
+    env = input("Environment [TRAIN]: ").strip().upper() or DEFAULT_ENVIRONMENT
+    if env not in EXTENDED_OASIS_URLS:
+        valid = ", ".join(sorted(EXTENDED_OASIS_URLS))
+        print(f"Invalid environment: {env}", file=sys.stderr)
+        print(f"Valid choices: {valid}", file=sys.stderr)
+        return 2
+
     master = getpass.getpass("Master password (encrypts credentials file): ")
     master_confirm = getpass.getpass("Confirm master password: ")
     if master != master_confirm:
@@ -146,7 +152,7 @@ def _cmd_init(args) -> int:
         password=password,
         cert_path=str(resolved_cert),
         cert_password=cert_password,
-        environment=env.upper(),
+        environment=env,
     )
     path = save_credentials(data, master)
     print(f"\nSaved: {path}")
