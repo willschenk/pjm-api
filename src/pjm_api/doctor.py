@@ -15,6 +15,7 @@ class DoctorStep:
     name: str
     ok: bool
     detail: str = ""
+    fix: str = ""
 
 
 def _pfx_available() -> bool:
@@ -35,15 +36,36 @@ def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
     elif settings.username and settings.password and settings.certificate_path:
         steps.append(DoctorStep("credentials file", True, "from environment"))
     else:
-        steps.append(DoctorStep("credentials file", False, "run: pjm-api init"))
+        steps.append(
+            DoctorStep(
+                "credentials file",
+                False,
+                "not configured",
+                fix="Run: pjm-api init",
+            )
+        )
         return steps, False
 
     cert = settings.certificate_path
     if not cert:
-        steps.append(DoctorStep("certificate file", False, "cert_path not set"))
+        steps.append(
+            DoctorStep(
+                "certificate file",
+                False,
+                "cert_path not set",
+                fix="Run: pjm-api init and provide a .p12 or .pfx login certificate",
+            )
+        )
         return steps, False
     if not cert.exists():
-        steps.append(DoctorStep("certificate file", False, f"not found: {cert}"))
+        steps.append(
+            DoctorStep(
+                "certificate file",
+                False,
+                f"not found: {cert}",
+                fix="Re-run pjm-api init with the correct certificate path",
+            )
+        )
         return steps, False
 
     if cert.suffix.lower() in {".p12", ".pfx"} and not _pfx_available():
@@ -51,7 +73,8 @@ def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
             DoctorStep(
                 "certificate file",
                 False,
-                "install [pfx]: pip install pjm-api[pfx]",
+                "PKCS#12 support not installed",
+                fix='Install with: python -m pip install -e ".[pfx]"',
             )
         )
         return steps, False
@@ -59,7 +82,14 @@ def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
     report = inspect_certificate(cert, settings.certificate_password)
     if not report.healthy:
         detail = report.errors[0] if report.errors else "certificate check failed"
-        steps.append(DoctorStep("certificate file", False, detail))
+        steps.append(
+            DoctorStep(
+                "certificate file",
+                False,
+                detail,
+                fix="Re-run pjm-api init with a valid .p12 or .pfx login certificate",
+            )
+        )
         return steps, False
 
     expiry = ""
@@ -72,7 +102,14 @@ def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
             client.authenticate()
         steps.append(DoctorStep("SSO authentication", True))
     except Exception as exc:
-        steps.append(DoctorStep("SSO authentication", False, str(exc)))
+        steps.append(
+            DoctorStep(
+                "SSO authentication",
+                False,
+                str(exc),
+                fix="Check PJM login details, CAM certificate approval, and environment",
+            )
+        )
         return steps, False
 
     try:
@@ -86,12 +123,18 @@ def run_doctor(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
                     f"TRANSSERV smoke ({settings.environment})",
                     False,
                     f"HTTP {resp.status_code}",
+                    fix="Authentication worked; check OASIS access and template parameters",
                 )
             )
             return steps, False
     except Exception as exc:
         steps.append(
-            DoctorStep(f"TRANSSERV smoke ({settings.environment})", False, str(exc))
+            DoctorStep(
+                f"TRANSSERV smoke ({settings.environment})",
+                False,
+                str(exc),
+                fix="Authentication worked; check OASIS access and template parameters",
+            )
         )
         return steps, False
 
@@ -104,6 +147,8 @@ def format_doctor_report(steps: list[DoctorStep], passed: bool) -> str:
         status = "OK" if step.ok else "FAIL"
         detail = f"  ({step.detail})" if step.detail else ""
         lines.append(f"[{i}/{len(steps)}] {step.name:30} {status}{detail}")
+        if not step.ok and step.fix:
+            lines.append(f"      Fix: {step.fix}")
     lines.append("")
     lines.append("All checks passed." if passed else "Doctor failed. See docs/troubleshooting.md")
     return "\n".join(lines)

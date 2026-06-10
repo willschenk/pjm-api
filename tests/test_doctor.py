@@ -1,10 +1,11 @@
+from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
 
 from pjm_api.config import load_settings
 from pjm_api.credentials import StoredCredentials, save_credentials
-from pjm_api.doctor import run_doctor
+from pjm_api.doctor import DoctorStep, format_doctor_report, run_doctor
 
 
 @pytest.fixture
@@ -30,7 +31,42 @@ def test_doctor_fails_no_credentials(monkeypatch):
     settings = load_settings(use_credentials_file=False)
     steps, passed = run_doctor(settings)
     assert not passed
-    assert "init" in steps[0].detail
+    assert steps[0].fix == "Run: pjm-api init"
+
+
+def test_doctor_failure_steps_include_fix(creds_file, monkeypatch):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    settings = replace(load_settings(prompt_unlock=False), certificate_path=None)
+    steps, passed = run_doctor(settings)
+    assert not passed
+    failed = [step for step in steps if not step.ok]
+    assert failed
+    assert all(step.fix for step in failed)
+    assert failed[0].fix == "Run: pjm-api init and provide a .p12 or .pfx login certificate"
+
+
+def test_format_doctor_report_shows_fix_for_failures():
+    steps = [
+        DoctorStep("credentials file", False, "not configured", fix="Run: pjm-api init"),
+        DoctorStep("certificate file", True, "expires 2026-01-01"),
+    ]
+    report = format_doctor_report(steps, passed=False)
+    assert "[1/2] credentials file" in report
+    assert "FAIL  (not configured)" in report
+    assert "      Fix: Run: pjm-api init" in report
+    assert report.count("Fix:") == 1
+    assert "Doctor failed. See docs/troubleshooting.md" in report
+
+
+def test_format_doctor_report_success_has_no_fix_lines():
+    steps = [
+        DoctorStep("credentials file", True, "/tmp/credentials.enc"),
+        DoctorStep("certificate file", True, "expires 2026-01-01"),
+        DoctorStep("SSO authentication", True),
+    ]
+    report = format_doctor_report(steps, passed=True)
+    assert "Fix:" not in report
+    assert "All checks passed." in report
 
 
 def test_doctor_sso_step(creds_file, monkeypatch, tmp_path):
