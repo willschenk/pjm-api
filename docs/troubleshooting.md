@@ -9,6 +9,7 @@ Every error prints a `Fix:` line. Start with `pjm-api doctor`.
 | Credentials file not found | `pjm-api init` |
 | Wrong master password | Re-enter password or `pjm-api credentials rotate-password` |
 | Missing: username, password, cert_path | `pjm-api init` |
+| Missing: PJM_CLI_JAR_PATH | Set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` or pass `--jar-path` |
 
 ## Certificate
 
@@ -34,6 +35,8 @@ Every error prints a `Fix:` line. Start with `pjm-api doctor`.
 |-------|-----|
 | OASIS request failed (4xx) | Check template params; run `pjm-api templates info NAME` |
 | TRANSSERV smoke FAIL | Run `pjm-api doctor` first; fix earlier steps |
+| OASIS URL for TEST/STAGE is not public | Pass `--oasis-url` or set `PJM_OASIS_URL` to your private URL |
+| Blocked PRODUCTION write/reservation action | Use TRAIN, or set `PJM_ALLOW_PRODUCTION_WRITE=1` only for intentional production writes |
 
 ## Still stuck?
 

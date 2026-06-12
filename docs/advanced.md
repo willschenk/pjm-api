@@ -12,7 +12,7 @@ Use this page only for fallback and automation scenarios.
 
 ## Java CLI backend
 
-Native Python is the default backend. Use the Java CLI backend only when you need to match PJM's CLI behavior exactly.
+The Java CLI backend is the default backend. It matches PJM's CLI behavior and is the recommended path for normal OASIS requests.
 
 Install the PJM CLI zip into a local directory:
 
@@ -23,10 +23,17 @@ pjm-api cli install --dir ~/.pjm/cli
 Run a smoke test through the CLI backend:
 
 ```bash
-PJM_BACKEND=cli PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar pjm-api smoke
+PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar pjm-api smoke
 ```
 
-Requires Java 8 or newer. Prefer the native backend for normal use.
+Requires Java 8 or newer. Override Java with `PJM_CLI_JAVA_PATH` or `--java-path` when `java` is not on PATH.
+
+Use the native backend only when you intentionally want the Python mTLS implementation:
+
+```bash
+PJM_BACKEND=native pjm-api smoke
+pjm-api template TRANSSERV --backend native
+```
 
 ## Environments
 
@@ -34,17 +41,20 @@ Requires Java 8 or newer. Prefer the native backend for normal use.
 |------|-----|
 | TRAIN | `https://oasisrefreshtrain.pjm.com/OASIS/` |
 | PRODUCTION | `https://pjmoasis.pjm.com/OASIS/` |
-| TEST | `https://oasis.test.pjm.com/OASIS/` |
-| STAGE | `https://oasis.ac1stage.pjm.com/OASIS/` |
+| TEST | blank by default; pass a private URL with `--oasis-url` or `PJM_OASIS_URL` |
+| STAGE | blank by default; pass a private URL with `--oasis-url` or `PJM_OASIS_URL` |
 
 Use one of:
 
 ```bash
 pjm-api doctor --env PRODUCTION
 PJM_ENV=PRODUCTION pjm-api doctor
+pjm-api smoke --env TEST --oasis-url https://private.example/OASIS/
 ```
 
 Start in `TRAIN`. Move to `PRODUCTION` only after `pjm-api doctor` passes in training.
+
+Production read requests print a warning. Production write or reservation-style actions are blocked unless you set `PJM_ALLOW_PRODUCTION_WRITE=1` or pass `--allow-production-write`. Disable only the warning with `PJM_DISABLE_PRODUCTION_WARNING=1` or `--no-production-warning`.
 
 ## Plain environment fallback
 

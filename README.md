@@ -16,18 +16,20 @@ clone -> install -> pjm-api init -> pjm-api doctor -> pjm-api guide -> pjm-api t
 
 A user should not need to understand the full PJM browserless authentication flow before making a basic request. The package should hide the mechanical parts while still making failures easy to diagnose.
 
-Keep the project small. Native Python is the default path. The Java CLI backend is an advanced fallback.
+Keep the project small. The Java CLI backend is the default path because it matches PJM's official CLI behavior. The native Python backend remains available for advanced use.
 
 ## Requirements
 
 | Requirement | Notes |
 |---|---|
 | Python | Python 3.10 or newer |
+| Java | Java 8 or newer, available as `java` or configured with `PJM_CLI_JAVA_PATH` |
+| PJM Java CLI | Local `pjm-cli.jar`, configured with `PJM_CLI_JAR_PATH` or `--jar-path` |
 | PJM account | Access to the PJM environment you want to use |
 | Login certificate | Local `.p12` or `.pfx` file containing the private key and certificate |
 | Account Manager approval | Matching public certificate uploaded in PJM Account Manager and approved by the CAM |
 
-Install with the `pfx` extra for normal `.p12` or `.pfx` use.
+Install with the `pfx` extra when you want local PKCS#12 certificate inspection or the native Python backend.
 
 ## Quick start
 
@@ -37,10 +39,12 @@ Install with the `pfx` extra for normal `.p12` or `.pfx` use.
 git clone https://github.com/willschenk/pjm-api.git
 cd pjm-api
 python -m pip install -e ".[pfx]"
+pjm-api cli install --dir ~/.pjm/cli
+export PJM_CLI_JAR_PATH="$HOME/.pjm/cli/pjm-cli.jar"
 pjm-api init
 ```
 
-The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file.
+The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file. You can also point at an existing CLI jar with `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar`.
 
 Verify everything:
 
@@ -55,10 +59,9 @@ After setup, run `pjm-api guide` to see API call options and available templates
 Expected shape of a passing result:
 
 ```text
-[1/4] credentials file               OK  (~/.pjm/credentials.enc)
-[2/4] certificate file               OK  (expires 2027-03-15)
-[3/4] SSO authentication             OK
-[4/4] TRANSSERV smoke (TRAIN)        OK
+[1/3] credentials file               OK  (~/.pjm/credentials.enc)
+[2/3] certificate file               OK  (expires 2027-03-15)
+[3/3] TRANSSERV smoke (TRAIN)        OK
 
 All checks passed.
 ```
@@ -75,21 +78,24 @@ Use production only after training works:
 pjm-api template TRANSSERV --env PRODUCTION
 ```
 
+Production read requests print a warning by default. Production write or reservation-style actions are blocked unless you explicitly set `PJM_ALLOW_PRODUCTION_WRITE=1` or pass `--allow-production-write`. Disable only the warning with `PJM_DISABLE_PRODUCTION_WARNING=1` or `--no-production-warning`.
+
 ## Setup flow
 
 ```mermaid
 flowchart TD
     A[Clone repo] --> B[Install with pfx extra]
-    B --> C[Run pjm-api init]
-    C --> D[Enter PJM login details]
-    D --> E[Enter local .p12 or .pfx path]
-    E --> F[Save encrypted credentials]
-    F --> G[Run pjm-api doctor]
-    G --> H{All checks pass?}
-    H -->|Yes| I[Run pjm-api guide]
-    I --> J[Run OASIS template requests]
-    H -->|No| K[Fix the failed doctor step]
-    K --> G
+    B --> C[Install or configure pjm-cli.jar]
+    C --> D[Run pjm-api init]
+    D --> E[Enter PJM login details]
+    E --> F[Enter local .p12 or .pfx path]
+    F --> G[Save encrypted credentials]
+    G --> H[Run pjm-api doctor]
+    H --> I{All checks pass?}
+    I -->|Yes| J[Run pjm-api guide]
+    J --> K[Run OASIS template requests]
+    I -->|No| L[Fix the failed doctor step]
+    L --> H
 ```
 
 ## Certificate model
@@ -126,10 +132,10 @@ sequenceDiagram
 
     User->>CLI: pjm-api template TRANSSERV
     CLI->>Store: unlock saved configuration
-    CLI->>Cert: load private key and certificate
-    CLI->>SSO: authenticate with mTLS plus login details
-    SSO-->>CLI: tokenId
-    CLI->>OASIS: template request with pjmauth cookie
+    CLI->>Cert: pass login .p12/.pfx to pjm-cli.jar
+    CLI->>SSO: pjm-cli.jar authenticates with login details and certificate
+    SSO-->>CLI: authenticated OASIS session
+    CLI->>OASIS: pjm-cli.jar template request
     OASIS-->>CLI: template response
     CLI->>SSO: logout
     CLI-->>User: print or save response
@@ -138,21 +144,21 @@ sequenceDiagram
 ## Python usage
 
 ```python
-from pjm_api import OasisClient, load_settings
+from pjm_api import CliBackend, load_settings
 
-with OasisClient(load_settings()) as client:
-    response = client.smoke_transserv()
-    print(response.text()[:500])
+backend = CliBackend(load_settings())
+ok = backend.smoke_test()
+print("ok:", ok)
 ```
 
-See [docs/python-usage.md](docs/python-usage.md) for template queries, saving responses, and credential handling.
+See [docs/python-usage.md](docs/python-usage.md) for CLI backend examples, native examples, saving responses, and credential handling.
 
 ## CLI reference
 
 | Command | Purpose |
 |---|---|
 | `pjm-api init` | Create the encrypted local credentials file |
-| `pjm-api doctor` | Check credentials, certificate, SSO login, and TRANSSERV smoke request |
+| `pjm-api doctor` | Check credentials, certificate, and TRANSSERV smoke request |
 | `pjm-api doctor --offline` | Check local credentials and certificate only |
 | `pjm-api guide` | Show API call options and available templates |
 | `pjm-api smoke` | Run TRANSSERV smoke test |
@@ -178,6 +184,7 @@ pjm-api template TRANSSERV --outfile result.txt
 pjm-api template TRANSSERV --save /tmp/result.txt
 pjm-api template TRANSSERV --output-format DATA --query-param RETURN_TZ=EP
 pjm-api template TRANSSERV --env PRODUCTION
+pjm-api template TRANSSERV --env TEST --oasis-url https://private.example/OASIS/
 ```
 
 ## Configuration order
@@ -196,6 +203,22 @@ Default encrypted credentials path:
 
 Prefer `pjm-api init` for normal use. Use environment variables only for controlled automation.
 
+The public OASIS environments are:
+
+| Name | URL |
+|---|---|
+| TRAIN | `https://oasisrefreshtrain.pjm.com/OASIS/` |
+| PRODUCTION | `https://pjmoasis.pjm.com/OASIS/` |
+
+`TEST` and `STAGE` are recognized names but have blank URLs by default. If you have access to either private environment, pass `--oasis-url` or set `PJM_OASIS_URL`.
+
+Production controls:
+
+| Setting | Purpose |
+|---|---|
+| `PJM_DISABLE_PRODUCTION_WARNING=1` / `--no-production-warning` | Suppress the production warning |
+| `PJM_ALLOW_PRODUCTION_WRITE=1` / `--allow-production-write` | Allow production write/reservation actions |
+
 ## Troubleshooting
 
 Start here:
@@ -211,6 +234,7 @@ The first failing line is the thing to fix.
 |---|---|
 | `credentials file FAIL` | Run `pjm-api init` |
 | `certificate file FAIL` | Confirm the `.p12` or `.pfx` path and certificate secret |
+| `Missing: PJM_CLI_JAR_PATH` | Install the PJM CLI jar or set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` |
 | `Public certificate only` | Use the login `.p12` or `.pfx`, not the public `.cer` or `.crt` |
 | `PKCS#12 requires [pfx] extra` | Reinstall with `python -m pip install -e ".[pfx]"` |
 | `SSO authentication FAIL` | Check login details, certificate approval, and environment |
