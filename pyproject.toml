@@ -48,7 +48,7 @@ pjm-api = "pjm_api.cli:main"
 packages = ["src/pjm_api"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/pjm_api", "tests", "docs", "examples"]
+include = ["src/pjm_api", "tests", "docs", "examples", "pjm_oasis_cli_quickstart.ipynb"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

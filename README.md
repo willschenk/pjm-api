@@ -35,6 +35,8 @@ Install with the `pfx` extra when you want local PKCS#12 certificate inspection 
 
 **Full walkthrough:** [docs/setup.md](docs/setup.md)
 
+Notebook walkthrough: [pjm_oasis_cli_quickstart.ipynb](pjm_oasis_cli_quickstart.ipynb)
+
 ```bash
 git clone https://github.com/willschenk/pjm-api.git
 cd pjm-api

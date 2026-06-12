@@ -36,6 +36,8 @@ pjm-api cli install --dir ~/.pjm/cli
 export PJM_CLI_JAR_PATH="$HOME/.pjm/cli/pjm-cli.jar"
 ```
 
+If you prefer a live Python walkthrough, open [../pjm_oasis_cli_quickstart.ipynb](../pjm_oasis_cli_quickstart.ipynb) and run it top to bottom after setting the same jar, credential, and certificate values.
+
 ## Initialize
 
 Create an encrypted credentials file at `~/.pjm/credentials.enc`:
