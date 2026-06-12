@@ -20,6 +20,27 @@ _INVALID_JSON_MESSAGE = "Authentication response was not JSON. Check the SSO URL
 _BODY_SNIPPET_LIMIT = 200
 
 
+class _KeepHeadersRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow redirects while preserving auth headers and mTLS context."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        moved = urllib.request.Request(
+            newurl,
+            headers=req.headers,
+            method=req.get_method(),
+        )
+        moved.data = req.data
+        return moved
+
+
+def _build_opener(ssl_context: ssl.SSLContext | None) -> urllib.request.OpenerDirector:
+    handlers: list[urllib.request.BaseHandler] = []
+    if ssl_context is not None:
+        handlers.append(urllib.request.HTTPSHandler(context=ssl_context))
+    handlers.append(_KeepHeadersRedirectHandler())
+    return urllib.request.build_opener(*handlers)
+
+
 def _safe_body_snippet(content: bytes) -> str:
     text = content.decode(errors="replace").strip()
     if not text:
@@ -35,6 +56,7 @@ class RawHTTPResponse:
     status_code: int
     headers: dict[str, str]
     content: bytes
+    final_url: str = ""
 
 
 def request(
@@ -50,15 +72,16 @@ def request(
     for key, value in (headers or {}).items():
         req.add_header(key, value)
 
+    opener = _build_opener(ssl_context)
     try:
-        with urllib.request.urlopen(req, context=ssl_context, timeout=timeout) as resp:
+        with opener.open(req, timeout=timeout) as resp:
             content = resp.read()
             resp_headers = {k.lower(): v for k, v in resp.headers.items()}
-            return RawHTTPResponse(resp.status, resp_headers, content)
+            return RawHTTPResponse(resp.status, resp_headers, content, resp.geturl())
     except urllib.error.HTTPError as exc:
         content = exc.read()
         resp_headers = {k.lower(): v for k, v in exc.headers.items()} if exc.headers else {}
-        return RawHTTPResponse(exc.code, resp_headers, content)
+        return RawHTTPResponse(exc.code, resp_headers, content, exc.geturl())
     except TimeoutError as exc:
         raise PJMTimeoutError(f"Request timed out after {timeout}s: {url}") from exc
     except urllib.error.URLError as exc:

@@ -32,7 +32,7 @@ Requires Java 8 or newer. Prefer the native backend for normal use.
 
 | Name | URL |
 |------|-----|
-| TRAIN | `https://oasis.ac1train.pjm.com/OASIS/` |
+| TRAIN | `https://oasisrefreshtrain.pjm.com/OASIS/` |
 | PRODUCTION | `https://pjmoasis.pjm.com/OASIS/` |
 | TEST | `https://oasis.test.pjm.com/OASIS/` |
 | STAGE | `https://oasis.ac1stage.pjm.com/OASIS/` |

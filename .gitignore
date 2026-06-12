@@ -39,6 +39,7 @@ htmlcov/
 # Local private scripts and notes
 test.py
 GUIDANCE.md
+working_methods.py
 
 # Encrypted credentials (use pjm-api init)
 .pjm/

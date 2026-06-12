@@ -1,5 +1,5 @@
 import ssl
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -15,13 +15,17 @@ def test_request_http_error():
 
     err = urllib.error.HTTPError("https://example.com", 401, "Unauthorized", {}, None)
     err.fp = __import__("io").BytesIO(b"denied")
-    with patch("urllib.request.urlopen", side_effect=err):
+    mock_opener = MagicMock()
+    mock_opener.open.side_effect = err
+    with patch("pjm_api.transport._build_opener", return_value=mock_opener):
         resp = request("GET", "https://example.com")
     assert resp.status_code == 401
 
 
 def test_request_timeout():
-    with patch("urllib.request.urlopen", side_effect=TimeoutError):
+    mock_opener = MagicMock()
+    mock_opener.open.side_effect = TimeoutError
+    with patch("pjm_api.transport._build_opener", return_value=mock_opener):
         with pytest.raises(PJMTimeoutError):
             request("GET", "https://example.com", timeout=1)
 

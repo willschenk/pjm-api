@@ -13,7 +13,7 @@ from pjm_api.exceptions import PJMConfigError
 Backend = Literal["native", "cli"]
 
 OASIS_URLS: dict[str, str] = {
-    "TRAIN": "https://oasis.ac1train.pjm.com/OASIS/",
+    "TRAIN": "https://oasisrefreshtrain.pjm.com/OASIS/",
     "PRODUCTION": "https://pjmoasis.pjm.com/OASIS/",
 }
 
@@ -39,7 +39,7 @@ SSO_LOGOUT_URLS: dict[str, str] = {
 
 DEFAULT_ENVIRONMENT = "TRAIN"
 DEFAULT_DOWNLOADS = Path.cwd() / "downloads"
-DEFAULT_TIMEOUT_SEC = 30
+DEFAULT_TIMEOUT_SEC = 120
 
 
 def _env(*names: str, default: str = "") -> str:
