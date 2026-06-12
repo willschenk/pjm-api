@@ -10,6 +10,7 @@ from typing import Any
 from pjm_api.auth import PJMSession, create_session
 from pjm_api.config import PJMSettings
 from pjm_api.exceptions import PJMOasisError
+from pjm_api.production import assert_production_action_allowed, warn_if_production
 from pjm_api.response import OasisResponse
 from pjm_api.transport import request
 
@@ -68,6 +69,7 @@ class OasisClient:
         return self._session.ssl_context
 
     def authenticate(self) -> str:
+        warn_if_production(self.settings, action="authenticate")
         return self._session.authenticate()
 
     def close(self) -> None:
@@ -93,6 +95,7 @@ class OasisClient:
         body: bytes | None = None,
         reauth: bool = True,
     ) -> OasisResponse:
+        assert_production_action_allowed(self.settings, method=method, template=template)
         if not self._session.is_authenticated:
             self.authenticate()
 

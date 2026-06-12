@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pjm_api.certs import inspect_certificate
+from pjm_api.cli_adapter import CliBackend
 from pjm_api.config import PJMSettings
 from pjm_api.credentials import credentials_exist, credentials_path
 from pjm_api.oasis import OasisClient
@@ -69,36 +70,72 @@ def run_doctor(settings: PJMSettings, *, offline: bool = False) -> tuple[list[Do
         return steps, False
 
     if cert.suffix.lower() in {".p12", ".pfx"} and not _pfx_available():
-        steps.append(
-            DoctorStep(
-                "certificate file",
-                False,
-                "PKCS#12 support not installed",
-                fix='Install with: python -m pip install -e ".[pfx]"',
+        if settings.backend == "cli":
+            steps.append(
+                DoctorStep(
+                    "certificate file",
+                    True,
+                    "exists; PKCS#12 inspection skipped for CLI backend",
+                )
             )
-        )
-        return steps, False
-
-    report = inspect_certificate(cert, settings.certificate_password)
-    if not report.healthy:
-        detail = report.errors[0] if report.errors else "certificate check failed"
-        steps.append(
-            DoctorStep(
-                "certificate file",
-                False,
-                detail,
-                fix="Re-run pjm-api init with a valid .p12 or .pfx login certificate",
+        else:
+            steps.append(
+                DoctorStep(
+                    "certificate file",
+                    False,
+                    "PKCS#12 support not installed",
+                    fix='Install with: python -m pip install -e ".[pfx]"',
+                )
             )
-        )
-        return steps, False
+            return steps, False
+    else:
+        report = inspect_certificate(cert, settings.certificate_password)
+        if not report.healthy:
+            detail = report.errors[0] if report.errors else "certificate check failed"
+            steps.append(
+                DoctorStep(
+                    "certificate file",
+                    False,
+                    detail,
+                    fix="Re-run pjm-api init with a valid .p12 or .pfx login certificate",
+                )
+            )
+            return steps, False
 
-    expiry = ""
-    if report.not_after:
-        expiry = f"expires {report.not_after.date().isoformat()}"
-    steps.append(DoctorStep("certificate file", True, expiry))
+        expiry = ""
+        if report.not_after:
+            expiry = f"expires {report.not_after.date().isoformat()}"
+        steps.append(DoctorStep("certificate file", True, expiry))
 
     if offline:
         return steps, True
+
+    if settings.backend == "cli":
+        try:
+            settings.preflight()
+            ok = CliBackend(settings).smoke_test(print_results=False)
+        except Exception as exc:
+            steps.append(
+                DoctorStep(
+                    f"TRANSSERV smoke ({settings.environment})",
+                    False,
+                    str(exc),
+                    fix="Check PJM Java CLI configuration, access, and template parameters",
+                )
+            )
+            return steps, False
+        if ok:
+            steps.append(DoctorStep(f"TRANSSERV smoke ({settings.environment})", True))
+            return steps, True
+        steps.append(
+            DoctorStep(
+                f"TRANSSERV smoke ({settings.environment})",
+                False,
+                "CLI returned a non-success result",
+                fix="Authentication worked only if the CLI output reported SUCCESS; check access.",
+            )
+        )
+        return steps, False
 
     try:
         with OasisClient(settings) as client:

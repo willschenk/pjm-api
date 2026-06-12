@@ -112,7 +112,7 @@ def test_doctor_offline_still_fails_local_errors(monkeypatch):
 
 def test_doctor_sso_step(creds_file, monkeypatch, tmp_path):
     monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
-    settings = load_settings(prompt_unlock=False)
+    settings = load_settings(prompt_unlock=False, backend="native")
 
     with (
         patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
@@ -128,3 +128,25 @@ def test_doctor_sso_step(creds_file, monkeypatch, tmp_path):
         mock_client.return_value.smoke_transserv.return_value.status_code = 200
         steps, passed = run_doctor(settings)
     assert any(s.name == "SSO authentication" for s in steps)
+
+
+def test_doctor_cli_backend_uses_cli_smoke(creds_file, monkeypatch, tmp_path):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    jar = tmp_path / "pjm-cli.jar"
+    jar.write_bytes(b"jar")
+    settings = replace(load_settings(prompt_unlock=False), jar_path=jar)
+
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.CliBackend") as mock_backend,
+    ):
+        mock_inspect.return_value.healthy = True
+        mock_inspect.return_value.errors = ()
+        mock_inspect.return_value.not_after = None
+        mock_backend.return_value.smoke_test.return_value = True
+        steps, passed = run_doctor(settings)
+
+    assert passed
+    mock_backend.return_value.smoke_test.assert_called_once_with(print_results=False)
+    assert any(s.name == "TRANSSERV smoke (TRAIN)" for s in steps)
+    assert not any(s.name == "SSO authentication" for s in steps)

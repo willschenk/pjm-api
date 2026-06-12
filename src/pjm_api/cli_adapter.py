@@ -19,6 +19,7 @@ from pjm_api.oasis_cli import (
     normalize_template_name,
     qualify_result_with_criteria,
 )
+from pjm_api.production import assert_production_action_allowed, warn_if_production
 
 # PJM CLI requires credentials via flags; native backend avoids argv secret exposure.
 CLI_ARGV_SECRET_WARNING = (
@@ -110,15 +111,15 @@ class CliBackend:
             *self._base_cmd(),
             "-s",
             self.settings.oasis_base_url,
-            "-t",
-            method.upper(),
             "-a",
             action,
-            "-o",
-            out_name,
         ]
+        method_upper = method.upper()
+        if method_upper != "GET":
+            cmd.extend(["-t", method_upper])
         for key, value in qparams.items():
             cmd.extend(["-q", f"{key}={value}"])
+        cmd.extend(["-o", out_name])
         cmd.extend(TIMEOUT)
         return cmd
 
@@ -134,6 +135,11 @@ class CliBackend:
         method: str = "GET",
         print_results: bool = False,
     ) -> BackendResult:
+        assert_production_action_allowed(
+            self.settings,
+            method=method,
+            template=template,
+        )
         self.settings.downloads_dir.mkdir(parents=True, exist_ok=True)
         out_name = filename_only(outfile or f"{template.lower()}_sample.txt")
         cmd = self.make_template_cmd(
@@ -171,10 +177,10 @@ class CliBackend:
             "RETURN_TZ=EP",
             "-q",
             "VERSION=3.3",
-            *TIMEOUT,
         ]
         if outfile:
             cmd.extend(["-o", filename_only(outfile)])
+        cmd.extend(TIMEOUT)
         return cmd
 
     def smoke_test(
@@ -184,6 +190,7 @@ class CliBackend:
         print_results: bool = True,
         outfile: str | None = None,
     ) -> bool:
+        warn_if_production(self.settings, action="smoke")
         self.settings.downloads_dir.mkdir(parents=True, exist_ok=True)
         cmd = self.build_smoke_test_cmd(outfile=outfile or SMOKE_OUTFILE)
         result = self.run_cli(cmd, timeout_sec=timeout_sec, print_results=print_results)
@@ -199,27 +206,28 @@ class CliBackend:
         print(f"[SMOKE TEST:{env}] {'PASS' if ok else 'FAIL'}")
         return ok
 
-    def run_all_smoke_tests(
-        self, environments: Iterable[str] = ("TEST", "STAGE", "TRAIN")
-    ) -> dict[str, bool]:
+    def run_all_smoke_tests(self, environments: Iterable[str] = ("TRAIN",)) -> dict[str, bool]:
         from pjm_api.config import load_settings
 
         results: dict[str, bool] = {}
         for env in environments:
             print("=" * 72)
             print(f"Running smoke test for {env} ...")
-            env_settings = load_settings(
-                username=self.settings.username,
-                password=self.settings.password,
-                certificate=str(self.settings.certificate_path or ""),
-                certificate_password=self.settings.certificate_password or "",
-                environment=env,
-                backend="cli",
-                jar_path=str(self.settings.jar_path or ""),
-                downloads_dir=str(self.settings.downloads_dir),
-            )
-            backend = CliBackend(env_settings)
             try:
+                env_settings = load_settings(
+                    username=self.settings.username,
+                    password=self.settings.password,
+                    certificate=str(self.settings.certificate_path or ""),
+                    certificate_password=self.settings.certificate_password or "",
+                    environment=env,
+                    backend="cli",
+                    java_path=self.settings.java_path,
+                    jar_path=str(self.settings.jar_path or ""),
+                    downloads_dir=str(self.settings.downloads_dir),
+                    disable_production_warning=self.settings.disable_production_warning,
+                    allow_production_write=self.settings.allow_production_write,
+                )
+                backend = CliBackend(env_settings)
                 results[env] = backend.smoke_test(outfile=f"smoke_{env.lower()}.txt")
             except Exception as exc:
                 print(f"Result [{env}]: ERROR - {exc}")

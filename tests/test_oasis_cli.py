@@ -45,6 +45,10 @@ def test_make_template_cmd_shape(monkeypatch, tmp_path):
     assert "java" in cmd
     assert str(jar) in cmd
     assert "TEMPLATE=TRANSSERV" in cmd
+    assert "-t" not in cmd
+    assert cmd[cmd.index("-s") + 2] == "-a"
+    assert cmd.index("-o") > max(i for i, part in enumerate(cmd) if part == "-q")
+    assert cmd[-2:] == ["-z", "180000"]
 
 
 def test_qualify_result_with_criteria():

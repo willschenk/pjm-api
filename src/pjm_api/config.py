@@ -11,6 +11,7 @@ from typing import Literal, cast
 from pjm_api.exceptions import PJMConfigError
 
 Backend = Literal["native", "cli"]
+DEFAULT_BACKEND: Backend = "cli"
 
 OASIS_URLS: dict[str, str] = {
     "TRAIN": "https://oasisrefreshtrain.pjm.com/OASIS/",
@@ -19,8 +20,8 @@ OASIS_URLS: dict[str, str] = {
 
 EXTENDED_OASIS_URLS: dict[str, str] = {
     **OASIS_URLS,
-    "TEST": "https://oasis.test.pjm.com/OASIS/",
-    "STAGE": "https://oasis.ac1stage.pjm.com/OASIS/",
+    "TEST": "",
+    "STAGE": "",
 }
 
 SSO_URLS: dict[str, str] = {
@@ -48,6 +49,10 @@ def _env(*names: str, default: str = "") -> str:
         if value is not None and value != "":
             return value
     return default
+
+
+def _truthy(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def parse_certificate(value: str) -> tuple[Path, str | None]:
@@ -83,7 +88,13 @@ def resolve_oasis_url(environment: str, custom_url: str = "") -> str:
     if env_key not in EXTENDED_OASIS_URLS:
         valid = ", ".join(sorted(EXTENDED_OASIS_URLS))
         raise PJMConfigError(f"Unknown environment {environment!r}. Valid: {valid}")
-    return EXTENDED_OASIS_URLS[env_key]
+    url = EXTENDED_OASIS_URLS[env_key]
+    if not url:
+        raise PJMConfigError(
+            f"OASIS URL for {env_key} is not public.",
+            fix="Set PJM_OASIS_URL or pass --oasis-url for this private environment.",
+        )
+    return url
 
 
 def get_env_url(env: str | None) -> str:
@@ -114,6 +125,8 @@ class PJMSettings:
     jar_path: Path | None
     downloads_dir: Path
     timeout_sec: int
+    disable_production_warning: bool
+    allow_production_write: bool
 
     def certificate_legacy(self) -> str:
         if not self.certificate_path:
@@ -144,7 +157,11 @@ class PJMSettings:
             raise PJMConfigError(
                 f"Certificate not found: {self.certificate_path}. Run: pjm-api init"
             )
-        if self.certificate_path.suffix.lower() in {".p12", ".pfx"} and not _pfx_installed():
+        if (
+            self.backend == "native"
+            and self.certificate_path.suffix.lower() in {".p12", ".pfx"}
+            and not _pfx_installed()
+        ):
             raise PJMConfigError("PKCS#12 requires [pfx] extra: pip install pjm-api[pfx]")
 
     def validate(self) -> None:
@@ -165,6 +182,8 @@ def load_settings(
     jar_path: str = "",
     downloads_dir: str = "",
     timeout_sec: int = 0,
+    disable_production_warning: bool = False,
+    allow_production_write: bool = False,
     use_credentials_file: bool = True,
     prompt_unlock: bool = True,
 ) -> PJMSettings:
@@ -203,7 +222,7 @@ def load_settings(
             cert_path = Path(cert_path_raw).expanduser() if cert_path_raw else None
             cert_password = cert_password_override or None
 
-    resolved_backend = (backend or _env("PJM_BACKEND", default="native")).lower()
+    resolved_backend = (backend or _env("PJM_BACKEND", default=DEFAULT_BACKEND)).lower()
     if resolved_backend not in ("native", "cli"):
         raise PJMConfigError("PJM_BACKEND must be 'native' or 'cli'.")
 
@@ -215,6 +234,12 @@ def load_settings(
         downloads_dir or _env("PJM_CLI_DOWNLOADS", default=str(DEFAULT_DOWNLOADS))
     ).expanduser()
     resolved_timeout = timeout_sec or int(_env("PJM_TIMEOUT_SEC", default=str(DEFAULT_TIMEOUT_SEC)))
+    resolved_disable_production_warning = disable_production_warning or _truthy(
+        _env("PJM_DISABLE_PRODUCTION_WARNING")
+    )
+    resolved_allow_production_write = allow_production_write or _truthy(
+        _env("PJM_ALLOW_PRODUCTION_WRITE")
+    )
 
     return PJMSettings(
         username=resolved_username,
@@ -230,6 +255,8 @@ def load_settings(
         jar_path=Path(resolved_jar).expanduser() if resolved_jar else None,
         downloads_dir=resolved_downloads,
         timeout_sec=resolved_timeout,
+        disable_production_warning=resolved_disable_production_warning,
+        allow_production_write=resolved_allow_production_write,
     )
 
 

@@ -48,8 +48,20 @@ def _build_parser() -> argparse.ArgumentParser:
     shared.add_argument("--cert")
     shared.add_argument("--cert-password")
     shared.add_argument("--backend", choices=("native", "cli"))
+    shared.add_argument("--java-path")
+    shared.add_argument("--jar-path")
     shared.add_argument("--downloads")
     shared.add_argument("--oasis-url")
+    shared.add_argument(
+        "--no-production-warning",
+        action="store_true",
+        help="Do not print the PRODUCTION environment warning.",
+    )
+    shared.add_argument(
+        "--allow-production-write",
+        action="store_true",
+        help="Allow PRODUCTION write/reservation actions.",
+    )
     shared.add_argument("-v", "--verbose", action="store_true")
     shared.add_argument("-q", "--quiet", action="store_true")
 
@@ -234,7 +246,11 @@ def _load_from_args(args: argparse.Namespace, *, prompt_unlock: bool = True):
         environment=args.env,
         oasis_url=getattr(args, "oasis_url", "") or "",
         backend=args.backend or "",
+        java_path=getattr(args, "java_path", "") or "",
+        jar_path=getattr(args, "jar_path", "") or "",
         downloads_dir=args.downloads or "",
+        disable_production_warning=getattr(args, "no_production_warning", False),
+        allow_production_write=getattr(args, "allow_production_write", False),
         prompt_unlock=prompt_unlock and prompt_secrets,
     )
     if prompt_secrets and not kwargs["password"] and not args.password:
@@ -252,6 +268,16 @@ def _cmd_config(settings) -> int:
         ("username", settings.username or "(not set)"),
         ("password", "***" if settings.password else "(not set)"),
         ("certificate", settings.certificate_path or "(not set)"),
+        ("java_path", getattr(settings, "java_path", "") or "(not set)"),
+        ("jar_path", getattr(settings, "jar_path", None) or "(not set)"),
+        (
+            "prod_warning",
+            "disabled" if getattr(settings, "disable_production_warning", False) else "enabled",
+        ),
+        (
+            "prod_writes",
+            "allowed" if getattr(settings, "allow_production_write", False) else "blocked",
+        ),
         ("credentials", credentials_path() if credentials_exist() else "(not set)"),
     ]:
         print(f"  {key + ':':14} {val}")
@@ -395,6 +421,9 @@ def main(argv: list[str] | None = None) -> int:
         if settings.backend == "cli":
             backend = CliBackend(settings)
             if args.command == "smoke":
+                if args.all:
+                    results = backend.run_all_smoke_tests()
+                    return 0 if results and all(results.values()) else 1
                 ok = backend.smoke_test(
                     timeout_sec=args.timeout_sec,
                     print_results=not args.quiet,
