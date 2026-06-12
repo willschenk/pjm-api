@@ -35,3 +35,14 @@ def test_notebook_does_not_require_interactive_prompt_support():
     text = (ROOT / NOTEBOOK).read_text(encoding="utf-8")
     assert "input(" not in text
     assert "getpass" not in text
+
+
+def test_notebook_uses_package_helpers_instead_of_local_functions():
+    data = json.loads((ROOT / NOTEBOOK).read_text(encoding="utf-8"))
+    code = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in data["cells"]
+        if cell.get("cell_type") == "code"
+    )
+    assert "from pjm_api" in code
+    assert "\ndef " not in code
