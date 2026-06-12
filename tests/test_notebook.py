@@ -29,3 +29,9 @@ def test_notebook_has_no_local_secrets_or_private_urls():
     ]
     for value in forbidden:
         assert value not in text
+
+
+def test_notebook_does_not_require_interactive_prompt_support():
+    text = (ROOT / NOTEBOOK).read_text(encoding="utf-8")
+    assert "input(" not in text
+    assert "getpass" not in text
