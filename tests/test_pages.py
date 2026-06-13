@@ -3,7 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "docs" / "index.html"
-PAGES_WORKFLOW = ROOT / ".github" / "workflows" / "pages.yml"
+README = ROOT / "README.md"
 
 
 class _HTMLCheck(HTMLParser):
@@ -44,9 +44,6 @@ def test_github_pages_guide_teaches_beginner_setup_path():
         assert expected in text
 
 
-def test_pages_workflow_publishes_docs_directory():
-    text = PAGES_WORKFLOW.read_text(encoding="utf-8")
-    assert "enablement: true" in text
-    assert "actions/upload-pages-artifact@v3" in text
-    assert "path: docs" in text
-    assert "actions/deploy-pages@v4" in text
+def test_readme_links_to_live_github_pages_guide():
+    text = README.read_text(encoding="utf-8")
+    assert "https://willschenk.github.io/pjm-api/" in text
