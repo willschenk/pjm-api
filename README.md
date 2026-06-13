@@ -4,6 +4,8 @@ A small Python CLI and client for PJM OASIS browserless access.
 
 `pjm-api` is meant to make the normal user path boring: clone the repo, install the package, run setup, verify the setup, and run a PJM OASIS template request.
 
+Beginner-friendly interactive guide: https://willschenk.github.io/pjm-api/
+
 This project is unofficial and is not affiliated with PJM.
 
 ## Goal
