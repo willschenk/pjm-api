@@ -73,6 +73,57 @@ def test_legacy_cli_env_aliases(monkeypatch):
     assert settings.certificate_legacy() == f"{legacy_cert}|legacy-pw"
 
 
+def test_cli_jar_arg_overrides_env_and_default(monkeypatch, tmp_path):
+    default_jar = tmp_path / "home" / ".pjm" / "cli" / "pjm-cli.jar"
+    env_jar = tmp_path / "env.jar"
+    arg_jar = tmp_path / "arg.jar"
+    default_jar.parent.mkdir(parents=True)
+    default_jar.write_bytes(b"default")
+    env_jar.write_bytes(b"env")
+    arg_jar.write_bytes(b"arg")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PJM_CLI_JAR_PATH", str(env_jar))
+
+    settings = load_settings(jar_path=str(arg_jar), use_credentials_file=False)
+
+    assert settings.jar_path == arg_jar
+
+
+def test_cli_jar_env_overrides_default(monkeypatch, tmp_path):
+    default_jar = tmp_path / "home" / ".pjm" / "cli" / "pjm-cli.jar"
+    env_jar = tmp_path / "env.jar"
+    default_jar.parent.mkdir(parents=True)
+    default_jar.write_bytes(b"default")
+    env_jar.write_bytes(b"env")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PJM_CLI_JAR_PATH", str(env_jar))
+
+    settings = load_settings(use_credentials_file=False)
+
+    assert settings.jar_path == env_jar
+
+
+def test_cli_jar_uses_default_install_when_present(monkeypatch, tmp_path):
+    default_jar = tmp_path / "home" / ".pjm" / "cli" / "pjm-cli.jar"
+    default_jar.parent.mkdir(parents=True)
+    default_jar.write_bytes(b"default")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("PJM_CLI_JAR_PATH", raising=False)
+
+    settings = load_settings(use_credentials_file=False)
+
+    assert settings.jar_path == default_jar
+
+
+def test_cli_jar_missing_when_not_configured_and_default_absent(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("PJM_CLI_JAR_PATH", raising=False)
+
+    settings = load_settings(use_credentials_file=False)
+
+    assert settings.jar_path is None
+
+
 def test_invalid_backend_raises(monkeypatch):
     monkeypatch.setenv("PJM_BACKEND", "invalid")
     with pytest.raises(PJMConfigError):

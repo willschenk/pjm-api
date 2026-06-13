@@ -41,6 +41,7 @@ SSO_LOGOUT_URLS: dict[str, str] = {
 DEFAULT_ENVIRONMENT = "TRAIN"
 DEFAULT_DOWNLOADS = Path.cwd() / "downloads"
 DEFAULT_TIMEOUT_SEC = 120
+_DEFAULT_CLI_JAR = Path("~/.pjm/cli/pjm-cli.jar")
 
 
 def _env(*names: str, default: str = "") -> str:
@@ -53,6 +54,11 @@ def _env(*names: str, default: str = "") -> str:
 
 def _truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _default_cli_jar_path() -> Path | None:
+    path = _DEFAULT_CLI_JAR.expanduser()
+    return path if path.exists() else None
 
 
 def parse_certificate(value: str) -> tuple[Path, str | None]:
@@ -230,6 +236,7 @@ def load_settings(
     custom_sso = sso_url or _env("PJM_SSO_URL")
     resolved_java = java_path or _env("PJM_CLI_JAVA_PATH") or shutil.which("java") or "java"
     resolved_jar = jar_path or _env("PJM_CLI_JAR_PATH")
+    default_jar = _default_cli_jar_path() if not resolved_jar else None
     resolved_downloads = Path(
         downloads_dir or _env("PJM_CLI_DOWNLOADS", default=str(DEFAULT_DOWNLOADS))
     ).expanduser()
@@ -252,7 +259,7 @@ def load_settings(
         logout_url=resolve_logout_url(resolved_environment),
         backend=cast(Backend, resolved_backend),
         java_path=resolved_java,
-        jar_path=Path(resolved_jar).expanduser() if resolved_jar else None,
+        jar_path=Path(resolved_jar).expanduser() if resolved_jar else default_jar,
         downloads_dir=resolved_downloads,
         timeout_sec=resolved_timeout,
         disable_production_warning=resolved_disable_production_warning,

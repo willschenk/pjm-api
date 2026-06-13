@@ -22,7 +22,7 @@ ok = backend.smoke_test()
 print("TRANSSERV:", "OK" if ok else "FAIL")
 ```
 
-`load_settings()` uses `PJM_CLI_JAR_PATH` or the `jar_path=` argument for the local `pjm-cli.jar`.
+`load_settings()` auto-detects `~/.pjm/cli/pjm-cli.jar`. Use `PJM_CLI_JAR_PATH` or `jar_path=` only when the jar lives somewhere else.
 
 ## Template request
 

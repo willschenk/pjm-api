@@ -20,10 +20,12 @@ Install the PJM CLI zip into a local directory:
 pjm-api cli install --dir ~/.pjm/cli
 ```
 
+The default install path, `~/.pjm/cli/pjm-cli.jar`, is auto-detected. Set `PJM_CLI_JAR_PATH` only when the jar lives somewhere else.
+
 Run a smoke test through the CLI backend:
 
 ```bash
-PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar pjm-api smoke
+pjm-api smoke
 ```
 
 Requires Java 8 or newer. Override Java with `PJM_CLI_JAVA_PATH` or `--java-path` when `java` is not on PATH.

@@ -24,7 +24,7 @@ Keep the project small. The Java CLI backend is the default path because it matc
 |---|---|
 | Python | Python 3.10 or newer |
 | Java | Java 8 or newer, available as `java` or configured with `PJM_CLI_JAVA_PATH` |
-| PJM Java CLI | Local `pjm-cli.jar`, configured with `PJM_CLI_JAR_PATH` or `--jar-path` |
+| PJM Java CLI | Local `pjm-cli.jar`; `~/.pjm/cli/pjm-cli.jar` is auto-detected |
 | PJM account | Access to the PJM environment you want to use |
 | Login certificate | Local `.p12` or `.pfx` file containing the private key and certificate |
 | Account Manager approval | Matching public certificate uploaded in PJM Account Manager and approved by the CAM |
@@ -42,11 +42,12 @@ git clone https://github.com/willschenk/pjm-api.git
 cd pjm-api
 python -m pip install -e ".[pfx]"
 pjm-api cli install --dir ~/.pjm/cli
-export PJM_CLI_JAR_PATH="$HOME/.pjm/cli/pjm-cli.jar"
 pjm-api init
 ```
 
-The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file. You can also point at an existing CLI jar with `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar`.
+The default jar install path is auto-detected. If you keep `pjm-cli.jar` elsewhere, set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` or pass `--jar-path`.
+
+The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file.
 
 Verify everything:
 
@@ -86,18 +87,13 @@ Production read requests print a warning by default. Production write or reserva
 
 ```mermaid
 flowchart TD
-    A[Clone repo] --> B[Install with pfx extra]
-    B --> C[Install or configure pjm-cli.jar]
-    C --> D[Run pjm-api init]
-    D --> E[Enter PJM login details]
-    E --> F[Enter local .p12 or .pfx path]
-    F --> G[Save encrypted credentials]
-    G --> H[Run pjm-api doctor]
-    H --> I{All checks pass?}
-    I -->|Yes| J[Run pjm-api guide]
-    J --> K[Run OASIS template requests]
-    I -->|No| L[Fix the failed doctor step]
-    L --> H
+    A[Install pjm-api] --> B[Install or point to pjm-cli.jar]
+    B --> C[Run pjm-api init]
+    C --> D[Run pjm-api doctor]
+    D --> E{Passes?}
+    E -->|Yes| F[Run template requests]
+    E -->|No| G[Fix first failed line]
+    G --> D
 ```
 
 ## Certificate model
@@ -236,7 +232,8 @@ The first failing line is the thing to fix.
 |---|---|
 | `credentials file FAIL` | Run `pjm-api init` |
 | `certificate file FAIL` | Confirm the `.p12` or `.pfx` path and certificate secret |
-| `Missing: PJM_CLI_JAR_PATH` | Install the PJM CLI jar or set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` |
+| `PJM CLI jar FAIL` | Run `pjm-api cli install --dir ~/.pjm/cli` or set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` |
+| `java runtime FAIL` | Install Java 8+ or set `PJM_CLI_JAVA_PATH=/path/to/java` |
 | `Public certificate only` | Use the login `.p12` or `.pfx`, not the public `.cer` or `.crt` |
 | `PKCS#12 requires [pfx] extra` | Reinstall with `python -m pip install -e ".[pfx]"` |
 | `SSO authentication FAIL` | Check login details, certificate approval, and environment |

@@ -46,3 +46,9 @@ def test_notebook_uses_package_helpers_instead_of_local_functions():
     )
     assert "from pjm_api" in code
     assert "\ndef " not in code
+
+
+def test_notebook_teaches_default_cli_jar_lookup():
+    text = (ROOT / NOTEBOOK).read_text(encoding="utf-8")
+    assert "~/.pjm/cli/pjm-cli.jar" in text
+    assert "default jar lookup" in text

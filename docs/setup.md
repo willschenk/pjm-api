@@ -33,8 +33,9 @@ Install the PJM CLI jar or point to an existing copy:
 
 ```bash
 pjm-api cli install --dir ~/.pjm/cli
-export PJM_CLI_JAR_PATH="$HOME/.pjm/cli/pjm-cli.jar"
 ```
+
+`~/.pjm/cli/pjm-cli.jar` is auto-detected. If your jar is somewhere else, set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` or pass `--jar-path`.
 
 If you prefer a live Python walkthrough, open [../pjm_oasis_cli_quickstart.ipynb](../pjm_oasis_cli_quickstart.ipynb) and run it top to bottom after setting the same jar, credential, and certificate values.
 
@@ -87,6 +88,7 @@ pjm-api doctor --offline
 ```
 
 Offline doctor skips network checks. It still checks credentials, certificate path, certificate type, decryption, and expiration when local inspection support is installed.
+For the default CLI backend it also checks Java and the local `pjm-cli.jar`.
 
 ## First request
 
@@ -127,7 +129,8 @@ This lists smoke tests, template queries, parameter hints, and every template in
 |---------|----------------|-----|
 | Using `.crt` or `.cer` instead of `.p12`/`.pfx` | Init or doctor rejects the file | Upload public cert to Account Manager; point init at the login `.p12`/`.pfx` |
 | Wrong environment | SSO or TRANSSERV fails | Re-run `pjm-api init` with the correct environment, or use `--env` on CLI commands |
-| Missing CLI jar | CLI backend cannot start | Set `PJM_CLI_JAR_PATH` or pass `--jar-path` |
+| Missing CLI jar | CLI backend cannot start | Run `pjm-api cli install --dir ~/.pjm/cli`, set `PJM_CLI_JAR_PATH`, or pass `--jar-path` |
+| Missing Java | CLI backend cannot start | Install Java 8+ or set `PJM_CLI_JAVA_PATH` |
 | Missing `[pfx]` extra | PKCS#12 cannot be read | `python -m pip install -e ".[pfx]"` |
 | Wrong certificate password | Init or doctor fails on decrypt | Re-run init with the correct PKCS#12 password |
 | CAM approval not complete | SSO passes certificate check locally but auth fails | Wait for CAM approval of the public cert in Account Manager |

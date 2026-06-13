@@ -11,7 +11,12 @@ from pathlib import Path
 from pjm_api.certs import inspect_certificate
 from pjm_api.cli_adapter import CLI_ARGV_SECRET_WARNING, CliBackend
 from pjm_api.cli_zip import install_cli_zip
-from pjm_api.config import DEFAULT_ENVIRONMENT, EXTENDED_OASIS_URLS, load_settings
+from pjm_api.config import (
+    _DEFAULT_CLI_JAR,
+    DEFAULT_ENVIRONMENT,
+    EXTENDED_OASIS_URLS,
+    load_settings,
+)
 from pjm_api.credentials import (
     StoredCredentials,
     credentials_exist,
@@ -399,6 +404,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "cli":
             jar = install_cli_zip(Path(args.dir).expanduser(), force=args.force)
             print(f"Installed: {jar}")
+            if jar == _DEFAULT_CLI_JAR.expanduser():
+                print("Default jar path is auto-detected; no PJM_CLI_JAR_PATH export needed.")
+            else:
+                print(f"Set PJM_CLI_JAR_PATH={jar}")
             return 0
         if args.command == "credentials":
             return _cmd_credentials(args)

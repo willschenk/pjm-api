@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 
 from pjm_api.certs import inspect_certificate
@@ -26,6 +27,69 @@ def _pfx_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+def _check_java(settings: PJMSettings) -> DoctorStep:
+    try:
+        result = subprocess.run(
+            [settings.java_path, "-version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except FileNotFoundError:
+        return DoctorStep(
+            "java runtime",
+            False,
+            f"not found: {settings.java_path}",
+            fix="Install Java 8+ or set PJM_CLI_JAVA_PATH",
+        )
+    except subprocess.TimeoutExpired:
+        return DoctorStep(
+            "java runtime",
+            False,
+            "java -version timed out",
+            fix="Check Java installation or set PJM_CLI_JAVA_PATH",
+        )
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip().splitlines()
+        return DoctorStep(
+            "java runtime",
+            False,
+            detail[0] if detail else f"java -version exited {result.returncode}",
+            fix="Install Java 8+ or set PJM_CLI_JAVA_PATH",
+        )
+    return DoctorStep("java runtime", True, settings.java_path)
+
+
+def _check_cli_jar(settings: PJMSettings) -> DoctorStep:
+    if not settings.jar_path:
+        return DoctorStep(
+            "PJM CLI jar",
+            False,
+            "not configured",
+            fix="Run: pjm-api cli install --dir ~/.pjm/cli or set PJM_CLI_JAR_PATH",
+        )
+    if not settings.jar_path.exists():
+        return DoctorStep(
+            "PJM CLI jar",
+            False,
+            f"not found: {settings.jar_path}",
+            fix="Run: pjm-api cli install --dir ~/.pjm/cli or set PJM_CLI_JAR_PATH",
+        )
+    return DoctorStep("PJM CLI jar", True, str(settings.jar_path))
+
+
+def _check_cli_ready(settings: PJMSettings) -> tuple[list[DoctorStep], bool]:
+    steps = [_check_java(settings)]
+    if not steps[-1].ok:
+        return steps, False
+
+    steps.append(_check_cli_jar(settings))
+    if not steps[-1].ok:
+        return steps, False
+    return steps, True
 
 
 def run_doctor(settings: PJMSettings, *, offline: bool = False) -> tuple[list[DoctorStep], bool]:
@@ -106,6 +170,12 @@ def run_doctor(settings: PJMSettings, *, offline: bool = False) -> tuple[list[Do
         if report.not_after:
             expiry = f"expires {report.not_after.date().isoformat()}"
         steps.append(DoctorStep("certificate file", True, expiry))
+
+    if settings.backend == "cli":
+        cli_steps, cli_ready = _check_cli_ready(settings)
+        steps.extend(cli_steps)
+        if not cli_ready:
+            return steps, False
 
     if offline:
         return steps, True

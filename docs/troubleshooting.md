@@ -9,7 +9,8 @@ Every error prints a `Fix:` line. Start with `pjm-api doctor`.
 | Credentials file not found | `pjm-api init` |
 | Wrong master password | Re-enter password or `pjm-api credentials rotate-password` |
 | Missing: username, password, cert_path | `pjm-api init` |
-| Missing: PJM_CLI_JAR_PATH | Set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` or pass `--jar-path` |
+| PJM CLI jar not configured | `pjm-api cli install --dir ~/.pjm/cli`, or set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` |
+| Java runtime not found | Install Java 8+ or set `PJM_CLI_JAVA_PATH=/path/to/java` |
 
 ## Certificate
 

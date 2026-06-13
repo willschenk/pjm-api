@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pjm_api.cli import main
+from pjm_api.config import _DEFAULT_CLI_JAR
 
 
 def _template_argv(**extra):
@@ -200,3 +201,22 @@ def test_cli_config_exit_code():
 def test_cli_templates_list():
     code = main(["templates", "list"])
     assert code == 0
+
+
+def test_cli_install_default_path_mentions_auto_detection(capsys):
+    jar = _DEFAULT_CLI_JAR.expanduser()
+    with patch("pjm_api.cli.install_cli_zip", return_value=jar):
+        code = main(["cli", "install"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert f"Installed: {jar}" in captured.out
+    assert "auto-detected" in captured.out
+
+
+def test_cli_install_non_default_path_mentions_env_var(tmp_path, capsys):
+    jar = tmp_path / "pjm-cli.jar"
+    with patch("pjm_api.cli.install_cli_zip", return_value=jar):
+        code = main(["cli", "install", "--dir", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert f"Set PJM_CLI_JAR_PATH={jar}" in captured.out

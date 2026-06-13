@@ -1,3 +1,4 @@
+import subprocess
 from dataclasses import replace
 from unittest.mock import patch
 
@@ -81,7 +82,7 @@ def test_format_doctor_report_offline_success():
 
 def test_doctor_offline_skips_network_checks(creds_file, monkeypatch):
     monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
-    settings = load_settings(prompt_unlock=False)
+    settings = load_settings(prompt_unlock=False, backend="native")
 
     with (
         patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
@@ -98,6 +99,121 @@ def test_doctor_offline_skips_network_checks(creds_file, monkeypatch):
     assert steps[0].name == "credentials file"
     assert steps[1].name == "certificate file"
     assert not any("SSO" in step.name or "TRANSSERV" in step.name for step in steps)
+
+
+def test_doctor_cli_offline_checks_java_and_jar(creds_file, monkeypatch, tmp_path):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    jar = tmp_path / "pjm-cli.jar"
+    jar.write_bytes(b"jar")
+    settings = replace(load_settings(prompt_unlock=False), jar_path=jar, java_path="java")
+
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.subprocess.run") as mock_run,
+        patch("pjm_api.doctor.OasisClient") as mock_client,
+        patch("pjm_api.doctor.CliBackend") as mock_backend,
+    ):
+        mock_inspect.return_value.healthy = True
+        mock_inspect.return_value.errors = ()
+        mock_inspect.return_value.not_after = None
+        mock_run.return_value = subprocess.CompletedProcess(["java", "-version"], 0, "", "")
+        steps, passed = run_doctor(settings, offline=True)
+
+    assert passed
+    assert [step.name for step in steps] == [
+        "credentials file",
+        "certificate file",
+        "java runtime",
+        "PJM CLI jar",
+    ]
+    mock_client.assert_not_called()
+    mock_backend.assert_not_called()
+
+
+def test_doctor_cli_offline_fails_missing_java(creds_file, monkeypatch, tmp_path):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    jar = tmp_path / "pjm-cli.jar"
+    jar.write_bytes(b"jar")
+    settings = replace(load_settings(prompt_unlock=False), jar_path=jar, java_path="missing-java")
+
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.subprocess.run", side_effect=FileNotFoundError),
+    ):
+        mock_inspect.return_value.healthy = True
+        mock_inspect.return_value.errors = ()
+        mock_inspect.return_value.not_after = None
+        steps, passed = run_doctor(settings, offline=True)
+
+    assert not passed
+    assert steps[-1].name == "java runtime"
+    assert not steps[-1].ok
+    assert "PJM_CLI_JAVA_PATH" in steps[-1].fix
+
+
+def test_doctor_cli_offline_fails_nonzero_java(creds_file, monkeypatch, tmp_path):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    jar = tmp_path / "pjm-cli.jar"
+    jar.write_bytes(b"jar")
+    settings = replace(load_settings(prompt_unlock=False), jar_path=jar, java_path="java")
+
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.subprocess.run") as mock_run,
+    ):
+        mock_inspect.return_value.healthy = True
+        mock_inspect.return_value.errors = ()
+        mock_inspect.return_value.not_after = None
+        mock_run.return_value = subprocess.CompletedProcess(
+            ["java", "-version"],
+            1,
+            "",
+            "Unable to locate Java Runtime\n",
+        )
+        steps, passed = run_doctor(settings, offline=True)
+
+    assert not passed
+    assert steps[-1].name == "java runtime"
+    assert steps[-1].detail == "Unable to locate Java Runtime"
+
+
+def test_doctor_cli_offline_fails_unconfigured_jar(creds_file, monkeypatch):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    settings = replace(load_settings(prompt_unlock=False), jar_path=None, java_path="java")
+
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.subprocess.run") as mock_run,
+    ):
+        mock_inspect.return_value.healthy = True
+        mock_inspect.return_value.errors = ()
+        mock_inspect.return_value.not_after = None
+        mock_run.return_value = subprocess.CompletedProcess(["java", "-version"], 0, "", "")
+        steps, passed = run_doctor(settings, offline=True)
+
+    assert not passed
+    assert steps[-1].name == "PJM CLI jar"
+    assert steps[-1].detail == "not configured"
+
+
+def test_doctor_cli_offline_fails_missing_jar_path(creds_file, monkeypatch, tmp_path):
+    monkeypatch.setenv("PJM_MASTER_PASSWORD", "master")
+    missing_jar = tmp_path / "missing.jar"
+    settings = replace(load_settings(prompt_unlock=False), jar_path=missing_jar, java_path="java")
+
+    with (
+        patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.subprocess.run") as mock_run,
+    ):
+        mock_inspect.return_value.healthy = True
+        mock_inspect.return_value.errors = ()
+        mock_inspect.return_value.not_after = None
+        mock_run.return_value = subprocess.CompletedProcess(["java", "-version"], 0, "", "")
+        steps, passed = run_doctor(settings, offline=True)
+
+    assert not passed
+    assert steps[-1].name == "PJM CLI jar"
+    assert steps[-1].detail == f"not found: {missing_jar}"
 
 
 def test_doctor_offline_still_fails_local_errors(monkeypatch):
@@ -138,11 +254,13 @@ def test_doctor_cli_backend_uses_cli_smoke(creds_file, monkeypatch, tmp_path):
 
     with (
         patch("pjm_api.doctor.inspect_certificate") as mock_inspect,
+        patch("pjm_api.doctor.subprocess.run") as mock_run,
         patch("pjm_api.doctor.CliBackend") as mock_backend,
     ):
         mock_inspect.return_value.healthy = True
         mock_inspect.return_value.errors = ()
         mock_inspect.return_value.not_after = None
+        mock_run.return_value = subprocess.CompletedProcess(["java", "-version"], 0, "", "")
         mock_backend.return_value.smoke_test.return_value = True
         steps, passed = run_doctor(settings)
 
