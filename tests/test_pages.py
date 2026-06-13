@@ -46,6 +46,7 @@ def test_github_pages_guide_teaches_beginner_setup_path():
 
 def test_pages_workflow_publishes_docs_directory():
     text = PAGES_WORKFLOW.read_text(encoding="utf-8")
+    assert "enablement: true" in text
     assert "actions/upload-pages-artifact@v3" in text
     assert "path: docs" in text
     assert "actions/deploy-pages@v4" in text
