@@ -19,6 +19,20 @@ def test_readme_is_the_beginner_setup_entrypoint():
         assert expected in text
 
 
+def test_readme_positions_repo_as_general_pjm_api_toolkit():
+    text = README.read_text(encoding="utf-8")
+
+    for expected in [
+        "Lightweight Python tools for PJM APIs",
+        "Data Miner / API Portal",
+        "API Portal subscription key",
+        "NAESB WEQ templates",
+        "NERC registry ingest",
+        "Compliance modeling is intentionally out of scope",
+    ]:
+        assert expected in text
+
+
 def test_readme_keeps_simple_explainer_diagrams():
     text = README.read_text(encoding="utf-8")
 

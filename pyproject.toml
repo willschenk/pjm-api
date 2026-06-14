@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "pjm-api"
 version = "1.1.0"
-description = "Python client for the PJM OASIS API with PKI certificate authentication"
+description = "Lightweight Python tools for PJM APIs, starting with OASIS browserless access"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "willschenk" }]
-keywords = ["pjm", "oasis", "energy", "api", "pki"]
+keywords = ["pjm", "oasis", "dataminer", "naesb", "energy", "api", "pki"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
