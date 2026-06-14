@@ -8,7 +8,7 @@ NOTEBOOK = ROOT / "pjm_oasis_cli_quickstart.ipynb"
 def test_readme_is_the_beginner_setup_entrypoint():
     text = README.read_text(encoding="utf-8")
 
-    assert "https://willschenk.github.io/pjm-api/" not in text
+    assert "Beginner-friendly interactive guide:" not in text
     for expected in [
         "~/.pjm/cli/pjm-cli.jar",
         "~/.pjm/credentials.enc",
