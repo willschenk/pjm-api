@@ -4,8 +4,6 @@ A small Python CLI and client for PJM OASIS browserless access.
 
 `pjm-api` is meant to make the normal user path boring: clone the repo, install the package, run setup, verify the setup, and run a PJM OASIS template request.
 
-Beginner-friendly interactive guide: https://willschenk.github.io/pjm-api/
-
 This project is unofficial and is not affiliated with PJM.
 
 ## Goal
@@ -35,9 +33,7 @@ Install with the `pfx` extra when you want local PKCS#12 certificate inspection 
 
 ## Quick start
 
-**Full walkthrough:** [docs/setup.md](docs/setup.md)
-
-Notebook walkthrough: [pjm_oasis_cli_quickstart.ipynb](pjm_oasis_cli_quickstart.ipynb)
+Use this README for the shortest path. Use [pjm_oasis_cli_quickstart.ipynb](pjm_oasis_cli_quickstart.ipynb) when you want to see each Java and jar step before running network calls.
 
 ```bash
 git clone https://github.com/willschenk/pjm-api.git
@@ -50,6 +46,16 @@ pjm-api init
 The default jar install path is auto-detected. If you keep `pjm-cli.jar` elsewhere, set `PJM_CLI_JAR_PATH=/path/to/pjm-cli.jar` or pass `--jar-path`.
 
 The setup command prompts for PJM login details, the local certificate file, the PJM environment, and a local master key for the encrypted credentials file.
+
+This is the persistent setup:
+
+| What | Where | How it is reused |
+|---|---|---|
+| PJM Java CLI jar | `~/.pjm/cli/pjm-cli.jar` | `load_settings()` auto-detects it |
+| Encrypted credentials | `~/.pjm/credentials.enc` | `load_settings()` unlocks it |
+| Downloads | `downloads/` by default | CLI requests write output files there |
+
+After this, scripts and notebooks can import the package instead of repeating setup values.
 
 Verify everything:
 
@@ -91,7 +97,8 @@ Production read requests print a warning by default. Production write or reserva
 flowchart TD
     A[Install pjm-api] --> B[Install or point to pjm-cli.jar]
     B --> C[Run pjm-api init]
-    C --> D[Run pjm-api doctor]
+    C --> P[Saved setup in ~/.pjm]
+    P --> D[Run pjm-api doctor]
     D --> E{Passes?}
     E -->|Yes| F[Run template requests]
     E -->|No| G[Fix first failed line]
@@ -124,24 +131,26 @@ Use the `.p12` or `.pfx` file with `pjm-api init`. Upload only the public certif
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI as pjm-api
+    participant App as script or pjm-api CLI
     participant Store as encrypted credentials
     participant Cert as local .p12/.pfx
     participant SSO as PJM SSO
     participant OASIS as PJM OASIS
 
-    User->>CLI: pjm-api template TRANSSERV
-    CLI->>Store: unlock saved configuration
-    CLI->>Cert: pass login .p12/.pfx to pjm-cli.jar
-    CLI->>SSO: pjm-cli.jar authenticates with login details and certificate
-    SSO-->>CLI: authenticated OASIS session
-    CLI->>OASIS: pjm-cli.jar template request
-    OASIS-->>CLI: template response
-    CLI->>SSO: logout
-    CLI-->>User: print or save response
+    User->>App: template TRANSSERV
+    App->>Store: load_settings unlocks saved setup
+    App->>Cert: pass login .p12/.pfx to pjm-cli.jar
+    App->>SSO: pjm-cli.jar authenticates with login details and certificate
+    SSO-->>App: authenticated OASIS session
+    App->>OASIS: pjm-cli.jar template request
+    OASIS-->>App: template response
+    App->>SSO: logout
+    App-->>User: print or save response
 ```
 
 ## Python usage
+
+After the quick start, this is the normal script shape. It uses the same persistent setup created by `pjm-api cli install` and `pjm-api init`.
 
 ```python
 from pjm_api import CliBackend, load_settings
@@ -151,7 +160,24 @@ ok = backend.smoke_test()
 print("ok:", ok)
 ```
 
-See [docs/python-usage.md](docs/python-usage.md) for CLI backend examples, native examples, saving responses, and credential handling.
+`load_settings()` resolves explicit arguments first, then `~/.pjm/credentials.enc`, then environment variables. For non-interactive automation, set `PJM_MASTER_PASSWORD` in the process environment so the encrypted credentials file can unlock without a prompt.
+
+Copy this pattern when building a script:
+
+```python
+from pjm_api import CliBackend, load_settings
+
+backend = CliBackend(load_settings())
+result = backend.run_template(
+    template="TRANSSERV",
+    params={"OUTPUT_FORMAT": "DATA"},
+    outfile="transserv.txt",
+)
+print("returncode:", result.returncode)
+print("output:", result.output_file)
+```
+
+Use [docs/python-usage.md](docs/python-usage.md) for more script examples and the advanced native backend.
 
 ## CLI reference
 
@@ -245,6 +271,7 @@ More detail: [docs/troubleshooting.md](docs/troubleshooting.md)
 
 ## Documentation
 
+- This README and [pjm_oasis_cli_quickstart.ipynb](pjm_oasis_cli_quickstart.ipynb) are the beginner setup path.
 - [Setup walkthrough](docs/setup.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Python usage](docs/python-usage.md)
